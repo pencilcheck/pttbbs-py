@@ -3,7 +3,14 @@ pttbbs-py project
 基於我無聊加上我有時間，這個作品在這偶然下誕生。
 雖然python可能不是最好的選擇，但是我喜歡python，加上他有很好的library可以使用我很喜歡。
 
+這project是為了重寫ptt bbs而誕生，但是目標是希望能夠超越前者。
+
 如果你對這有興趣，都歡迎下載、修改。所以的程式碼都是在GPL下，所以請放心。
+
+執行手冊：
+    由於目前pttbbs-py使用twisted以及argparse，建議如果跑不動請先用easy_install安裝。
+    目前因為要保持兼容性，所有py檔都以BIG5編碼。
+
 
 介紹就到這裡了，以下是更新：
 
