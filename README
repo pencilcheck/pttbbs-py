@@ -7,7 +7,6 @@ pttbbs-py project
 
 執行手冊：
     *由於目前pttbbs-py使用twisted以及argparse，建議如果跑不動請先用easy_install安裝。
-    *目前因為要保持兼容性，所有py檔都以BIG5編碼。
 
 大計畫：
     *Integrate Cython
