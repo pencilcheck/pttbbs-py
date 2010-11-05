@@ -1,6 +1,8 @@
-# -*- encoding: BIG5 -*-
+# -*- encoding: UTF8 -*-
 
 ## Ptt BBS python rewrite
+##
+## This is the model of MVC architecture
 ##
 ## Author: Penn Su <pennsu@gmail.com>
 ## 
@@ -17,35 +19,24 @@
 
 import sqlite3
 
+DB_USERS_PATH = object
+conn = object
 
-class BBS:
+# tables: users, posts     
+# fields for users: ip, login time, 
+# fields for posts:  
     
-    def __init__(self):
-        
-        self.DB_BBS_PATH = 'bbs.db'   
-        self.bbs_conn = sqlite3.connect(self.DB_BBS_PATH)
+def load(path='users.db'):
+    # create db if not exist already
     
-    def commit(self):
-        self.bbs_conn.commit()
-        
-    def close(self):
-        self.bbs_conn.close()
-    
-    def getCursor(self):
-        return self.bbs_conn.cursor()
-    
+    DB_USERS_PATH = path
+    conn = sqlite3.connect(DB_USERS_PATH)
 
-class User:
-    
-    def __init__(self):
-        self.DB_USERS_PATH = 'users.db'
-        self.user_conn = sqlite3.connect(self.DB_USERS_PATH)
-    
-    def commit(self):
-        self.user_conn.commit()
-    
-    def close(self):
-        self.user_conn.close()
-    
-    def getCursor(self):
-        return self.user_conn.cursor()    
+def commit(self):
+    conn.commit()
+
+def close(self):
+    conn.close()
+
+def getCursor(self):
+    return conn.cursor()    

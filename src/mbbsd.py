@@ -1,4 +1,4 @@
-# -*- encoding: BIG5 -*-
+# -*- encoding: UTF8 -*-
 
 ## Ptt BBS python rewrite
 ##
@@ -16,18 +16,18 @@
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import inspect
 
 from twisted.internet import protocol, reactor
 from twisted.conch import telnet
 
-import colors 
-from colors import Colors
-from colors import Align
-import terminfo
-import screens
+import bbs
+import db
+import term
+import screenlet
 
 
-
+# Parse program arguments
 parser = argparse.ArgumentParser(description='ptt BBS server daemon.')
 
 parser.add_argument('-d', '--daemon', action='store_true', help='Launch in Daemon mode')
@@ -42,10 +42,11 @@ print args
 print args.base
 
 # Database connection
+db.load()
 
-
-class BBS(telnet.Telnet):
-    
+# Set up server protocol
+class Protocol(telnet.Telnet):
+        
     def setLineMode(self, enable):
         if enable:
             self.requestNegotiation(telnet.LINEMODE, telnet.LINEMODE_EDIT + '\x01') # enable line buffer mode
@@ -54,9 +55,15 @@ class BBS(telnet.Telnet):
             
     def connectionMade(self):
         #self.do(telnet.LINEMODE) # disable line buffer mode
-        self.factory.connections = self.factory.connections + 1
         
-        screens.loginScr(self)
+        self.factory.connections = self.factory.connections + 1    
+        
+        self.b = bbs.BBS(term.Term(self), db)
+        
+        # BBS load external templates
+        self.b.loadExtScreenlets()
+        
+        self.b.push(screenlet.login) # push the login screenlet
         
     def enableRemote(self, option):
         print 'enableRemote', repr(option)
@@ -67,20 +74,25 @@ class BBS(telnet.Telnet):
         
     def applicationDataReceived(self, data):
         print "data:", repr(data)
+        #bbs.dataReceived(data)
             
         
     def connectionLost(self, reason):
         print reason
         self.factory.connections = self.factory.connections - 1
-        
+        #bbs.cleanup(self.transport.getHost().host)
+
 class BBSFactory(protocol.ServerFactory):
     
-    protocol = BBS
+    protocol = Protocol
     
     def __init__(self):
         self.connections = 0
     
 
-reactor.listenTCP(args.port, BBSFactory())
+# run the server
+factory = BBSFactory()
+
+reactor.listenTCP(args.port, factory)
 reactor.run()
  
