@@ -1,4 +1,4 @@
-# -*- encoding: UTF8 -*-
+# -*- encoding: BIG5 -*-
 
 ## Ptt BBS python rewrite
 ##
@@ -25,7 +25,6 @@ import bbs
 import db
 import term
 import screenlet
-
 
 # Parse program arguments
 parser = argparse.ArgumentParser(description='ptt BBS server daemon.')
@@ -54,6 +53,9 @@ class Protocol(telnet.Telnet):
             self.requestNegotiation(telnet.LINEMODE, telnet.LINEMODE_EDIT + '\x00') # disable line buffer mode
             
     def connectionMade(self):
+        self.will(telnet.ECHO) # disable echo on client terminal (data still sending)
+        self.will(telnet.SGA) # supress SGA
+        
         #self.do(telnet.LINEMODE) # disable line buffer mode
         
         self.factory.connections = self.factory.connections + 1    
@@ -71,10 +73,10 @@ class Protocol(telnet.Telnet):
 
     def disableRemote(self, option):
         print 'disableRemote', repr(option)
-        
+
     def applicationDataReceived(self, data):
-        print "data:", repr(data)
-        #bbs.dataReceived(data)
+        print "data:", data
+        self.b.dataReceived(data)
             
         
     def connectionLost(self, reason):

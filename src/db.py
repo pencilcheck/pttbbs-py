@@ -1,5 +1,3 @@
-# -*- encoding: UTF8 -*-
-
 ## Ptt BBS python rewrite
 ##
 ## This is the model of MVC architecture

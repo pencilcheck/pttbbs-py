@@ -1,5 +1,3 @@
-# -*- encoding: UTF8 -*-
-
 ## Ptt BBS python rewrite
 ##
 ## This is the model of MVC architecture but shouldn't be used directly
@@ -44,6 +42,9 @@
 ##         4 = Blue    5 = Magenta
 ##         6 = Cyan    7 = White
 
+import struct
+
+
 # For enumeration, using keyword argument (google it!)
 def enum(*sequential, **named):
     enums = dict(zip(sequential, range(len(sequential))), **named)
@@ -54,10 +55,12 @@ def enum(*sequential, **named):
 Colors = enum('Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White')
 Align = enum(Left='left', Center='center', Right='right')
 
-clr = "\033[2J"
-eratocol = "\033[K"
-color_reset = '\x1b[0m'
-blink = '\x1b[5m';
+clr = "\033[2J" # clear the screen
+eratocol = "\033[K" # erase to the end of line
+color_reset = '\x1b[0m' # reset color
+blink = '\x1b[5m'; # blink
+hide = '\033[?25l' # hide cursor
+show = '\033[?25h' # show curdasfd
 
 fg = '3'
 bg = '4'
@@ -72,6 +75,8 @@ class Term:
         return self
     
     def __init__(self, pro, w=80, h=22):
+        self.temp = []
+        
         self.width = w
         self.height = h
         
@@ -83,34 +88,46 @@ class Term:
     def setLineMode(self, enable):
         self.protocol.setLineMode(enable)
     
-    def put(self, row, coln, msg):
-        self.protocol.transport.write(self.move_cursor(row, coln))
+    def put_on_cursor(self, msg):
         self.protocol.transport.write(msg)
+    
+    def put(self, row, coln, msg):
+        self.move_cursor(row, coln)
+        self.protocol.transport.write(msg)
+    
+    def format_put_on_cursor(self, msg, maxLen, light, fg, bg, align=Align.Left):
+        self.protocol.transport.write(self.format(light, fg, bg, msg, maxLen, align))
         
-    def format_put(self, row, coln, msg, light, fg, bg, align=Align.Left):
-        self.protocol.transport.write(self.move_cursor(row, coln))
-        self.protocol.transport.write(self.format(light, fg, bg, msg, align))
-
+    def format_put(self, row, coln, msg, maxLen, light, fg, bg, align=Align.Left):
+        self.move_cursor(row, coln)
+        self.protocol.transport.write(self.format(light, fg, bg, msg, maxLen, align))
+    
+    def hide_cursor(self):
+        self.protocol.transport.write(hide)
+    
+    def show_cursor(self):
+        self.protocol.transport.write(show)
+    
     def move_cursor(self, row, coln):
         self.cursor_line = row
         self.cursor_coln = coln
-        return '\033[' + str(row) + ';' + str(coln) + 'H'
+        self.protocol.transport.write('\033[' + str(row) + ';' + str(coln) + 'H')
     
     def move_cursor_up(self, N):
         self.cursor_line = self.cursor_line - N
-        return '\033[' + str(N) + 'A'
+        self.protocol.transport.write('\033[' + str(N) + 'A')
     
     def move_cursor_down(self, N):
         self.cursor_line = self.cursor_line + N
-        return '\033[' + str(N) + 'B'
+        self.protocol.transport.write('\033[' + str(N) + 'B')
     
     def move_cursor_right(self, N):
         self.cursor_coln = self.cursor_coln + N
-        return '\033[' + str(N) + 'C'
+        self.protocol.transport.write('\033[' + str(N) + 'C')
     
     def move_cursor_left(self, N):
         self.cursor_coln = self.cursor_coln - N
-        return '\033[' + str(N) + 'D'
+        self.protocol.transport.write('\033[' + str(N) + 'D')
     
     def clr_scr(self):
         self.protocol.transport.write(clr)
@@ -118,42 +135,26 @@ class Term:
     def escape_sequence(self, light, fg_color, bg_color):
         return prefix + delim.join([str(int(light)), fg + str(fg_color), bg + str(bg_color)]) + end
     
-    def adjust(self, align, msg):
-        if msg == '':
-            return ''
+    def adjust(self, align, msg, maxLen):
+        if maxLen < len(msg):
+            return msg
         
-        remains = self.width - self.cursor_coln
+        #remains = self.width - self.cursor_coln
+        remains = maxLen
         
-        ret = ' '*(self.cursor_coln)
-        if len(msg) > remains:
-            segs = [msg[i:i+min(remains, len(msg)-i)] for i in xrange(0, len(msg), remains)]
-            if len(msg) % remains == 0:
-                ret = '\n'.join(segs)
-                msg = ''
-            else:
-                msg = segs[-1]
-                ret = '\n'.join(segs[:-1]) 
+        ret = ''
     
-        if align == Align.Left:
-            ret = ret + ''
-        elif align == Align.Center:
+        if align == Align.Center:
             ret = ret + ' '*(remains / 2 - len(msg) / 2)
         elif align == Align.Right:
             ret = ret + ' '*(remains - len(msg))
             
-        for i in xrange(self.width - len(ret)):
-            if i < len(msg):
-                ret = ret + msg[i]
-            else:
-                ret = ret + ' '
+        ret = ret + msg + ' '*(remains - len(msg) - len(ret))
         return ret
     
-    def format(self, light, fg_color, bg_color, msg, alignment=Align.Left):
-        rows = msg.split('\n')
-        print repr(rows)
-        msg = '\n'.join([self.adjust(alignment, line) for line in rows])
-        print msg
-        return self.escape_sequence(light, fg_color, bg_color) + msg + color_reset
+    # assuming len(msg) and maxLen are both < width 
+    def format(self, light, fg_color, bg_color, msg, maxLen, alignment=Align.Left):
+        return self.escape_sequence(light, fg_color, bg_color) + self.adjust(alignment, msg, maxLen) + color_reset
     
     def adjust_form(self, light, fg_color, bg_color, align, input, msg):
         ret = ' '*self.cursor_coln

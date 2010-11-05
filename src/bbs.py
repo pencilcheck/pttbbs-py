@@ -1,5 +1,3 @@
-# -*- encoding: UTF8 -*-
-
 ## Ptt BBS python rewrite
 ##
 ## This is the controller of MVC architecture
@@ -37,7 +35,7 @@ class BBS:
         return
     
     def dataReceived(self, data):
-        return
+        self.view_stack[-1].update(data)
     
     def loadExtScreenlets(self):
         return
@@ -58,3 +56,7 @@ class BBS:
     
     # ------------------------------------------
     # below are functions for screenlets to db
+    
+    
+def check_userid(userid):
+    return
