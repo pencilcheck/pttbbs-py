@@ -53,7 +53,7 @@ class BBS:
         else:
             self.view_stack.append(screenlet())
         """
-        self.view_stack.append(screenlet(term))
+        self.view_stack.append(screenlet(term, self))
     
         self.view_stack[len(self.view_stack)-1].update()
     
@@ -69,18 +69,18 @@ class BBS:
     
     
     def user_lookup(self, userid, password):
-        print 'looking up account for this guy', me
+        print 'looking up account for this guy', self.me
         
         if userid == "guest":
             db.instance.cursor.execute('select * from users where UId=?', (userid,))
             for row in db.instance.cursor:
                 print repr(row[2])
                 if row[2] == None:
-                    tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),me)]
+                    tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me)]
                     dict = (pickle.dumps(tmp),userid,)
                 else:
                     tmp = pickle.loads(str(row[2]))
-                    tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),me))
+                    tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me))
                     dict = (pickle.dumps(tmp),userid,)
                 print dict
                 db.instance.cursor.execute('update users set IPs=? where UId=?', dict)

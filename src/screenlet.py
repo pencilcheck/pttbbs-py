@@ -39,7 +39,7 @@ tab_key = '\t'
 shift_key = '' # it doesn't send
 
 class screenlet(object):
-    def __init__(self, term):
+    def __init__(self, term, bb):
         self.state = 0
         self.calls = 0
         self.billboard = []
@@ -47,6 +47,7 @@ class screenlet(object):
         self.content = []
         self.footer = []
         self.buff = term
+        self.bbs = bb
         
     def changeState(self, to):
         self.state = to
@@ -88,14 +89,14 @@ class screenlet(object):
 
 
 class login(screenlet):
-    def __init__(self, term):    
+    def __init__(self, term, bbs):    
         self.id = ''
         self.pw = '' 
         
         self.state = 0
         self.calls = 0
         
-        super(login, self).__init__(term)
+        super(login, self).__init__(term, bbs)
     
     # the methodology behind this is always static first, always the lowest layer first, think of layers, paint the least
     # dynamic layer first
@@ -124,21 +125,21 @@ class login(screenlet):
             if self.state == 0: # user id
                 self.id = self.buff.input
                 if self.id == "new":
-                    bbs.push(registration, self.buff)
+                    self.bbs.push(registration, self.buff)
                     return
                 if self.id == "guest":
-                    bbs.user_lookup(self.id, self.pw) # just to associate guest with IP
-                    bbs.push(welcome, self.buff)
+                    self.bbs.user_lookup(self.id, self.pw) # just to associate guest with IP
+                    self.bbs.push(welcome, self.buff)
                     return
                 self.buff.finish_for_input()
                 self.changeState(1)
                 
             else: # password
                 self.pw = self.buff.input
-                if bbs.user_lookup(self.id, self.pw) == 0: # 0 success
+                if self.bbs.user_lookup(self.id, self.pw) == 0: # 0 success
                     self.buff.print_input()
                     self.buff.finish_for_input()
-                    bbs.push(welcome, self.buff)
+                    self.bbs.push(welcome, self.buff)
                     return
                 else:
                     self.buff.finish_for_input()
