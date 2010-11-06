@@ -22,74 +22,80 @@ from time import strftime, localtime
 
 import db
 
-me = '127.0.0.1'
-
-view_stack = []
-view_cache = []
+class BBS:
+    view_stack = []
+    view_cache = []
+            
+    lookup = [{}]
+    
+    def __init__(self, ip='127.0.0.1'):
+        self.me = ip
         
-lookup = [{}]
+    # need a method to put into event loop in interval for animation stuff
+    def update(self):
+        return
     
-# need a method to put into event loop in interval for animation stuff
-def update():
-    return
-
-def cleanup():
-    return
-
-def dataReceived(data):
-    view_stack[-1].update(data)
-
-def setMe(ip):
-    me = ip
-
-def push(screenlet, selfdestruct=False):
-    if selfdestruct: # pop the caller
-        view_stack.pop()
-    if screenlet.__class__.__name__ in view_cache:
-        view_stack.append(view_cache[screenlet.__class__.__name__])
-    else:
-        view_stack.append(screenlet())
-    view_stack[len(view_stack)-1].update()
-
-def pop(show=True):
-    view_cache[view_stack[len(view_stack)-1].__class__.__name__] = view_stack.pop()
-    if pop:
-        view_stack[len(view_stack)-1].update()
+    def cleanup(self):
+        return
     
+    def dataReceived(self, data):
+        self.view_stack[-1].update(data)
     
+    def setMe(self, ip):
+        me = ip
     
-# ------------------------------------------
-# below are functions for screenlets to db
-
-
-def user_lookup(userid, password):
-    print 'looking up account for this guy', me
+    def push(self, screenlet, term, selfdestruct=False):
+        if selfdestruct: # pop the caller
+            self.view_stack.pop()
+        """
+        if screenlet.__class__.__name__ in self.view_cache:
+            self.view_stack.append(self.view_cache[screenlet.__class__.__name__])
+        else:
+            self.view_stack.append(screenlet())
+        """
+        self.view_stack.append(screenlet(term))
     
-    if userid == "guest":
-        db.instance.cursor.execute('select * from users where UId=?', (userid,))
-        for row in db.instance.cursor:
-            print repr(row[2])
-            if row[2] == None:
-                tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),me)]
-                dict = (pickle.dumps(tmp),userid,)
-            else:
-                tmp = pickle.loads(str(row[2]))
-                tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),me))
-                dict = (pickle.dumps(tmp),userid,)
-            print dict
-            db.instance.cursor.execute('update users set IPs=? where UId=?', dict)
+        self.view_stack[len(self.view_stack)-1].update()
+    
+    def pop(self, show=True):
+        self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
+        if show:
+            self.view_stack[len(self.view_stack)-1].update()
         
-        # update acl
-        acl = 0
-    else:
-        # Do this instead
-        t = (userid,password,)
-        db.instance.cursor.execute('select * from users where UId=? and PW=?', t)
-        for row in db.instance.cursor:
-            print row
         
-        # update acl
-        acl = 0
-    db.instance.commit()
+        
+    # ------------------------------------------
+    # below are functions for screenlets to db
     
-    return 0
+    
+    def user_lookup(self, userid, password):
+        print 'looking up account for this guy', me
+        
+        if userid == "guest":
+            db.instance.cursor.execute('select * from users where UId=?', (userid,))
+            for row in db.instance.cursor:
+                print repr(row[2])
+                if row[2] == None:
+                    tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),me)]
+                    dict = (pickle.dumps(tmp),userid,)
+                else:
+                    tmp = pickle.loads(str(row[2]))
+                    tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),me))
+                    dict = (pickle.dumps(tmp),userid,)
+                print dict
+                db.instance.cursor.execute('update users set IPs=? where UId=?', dict)
+            
+            # update acl
+            acl = 0
+        else:
+            # Do this instead
+            t = (userid,password,)
+            db.instance.cursor.execute('select * from users where UId=? and PW=?', t)
+            for row in db.instance.cursor:
+                print row
+            
+            # update acl
+            acl = 0
+        db.instance.commit()
+        
+        return 0

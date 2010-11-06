@@ -121,7 +121,7 @@ height  = 24
 # easier if this is a singleton
 class Term:
     
-    def __init__(self):
+    def __init__(self, pro):
         self.temp = []
         
         self.echo = True
@@ -130,6 +130,8 @@ class Term:
         self.cursor_coln = 0
         
         self.ready = False    
+        
+        self.protocol = pro
         
     def setProtocol(self, pro):
         self.protocol = pro
@@ -276,5 +278,3 @@ class Term:
     # assuming len(msg) and maxLen are both < width 
     def format(self, light, fg_color, bg_color, msg, maxLen, alignment=Align.Left):
         return self.escape_sequence(light, fg_color, bg_color) + self.adjust(alignment, msg, maxLen) + color_reset
-    
-instance = Term()

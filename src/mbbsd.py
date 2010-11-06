@@ -37,8 +37,7 @@ parser.add_argument('-b', '--base', help='Host url', default='127.0.0.1')
 
 args = parser.parse_args()
 
-me = '127.0.0.1'
-acl = 0
+connections = []
 
 # Set up server protocol
 class Protocol(telnet.Telnet):
@@ -50,22 +49,18 @@ class Protocol(telnet.Telnet):
             self.requestNegotiation(telnet.LINEMODE, telnet.LINEMODE_EDIT + '\x00') # disable line buffer mode
             
     def connectionMade(self):
+        self.factory.connections = self.factory.connections + 1
+         
         self.will(telnet.ECHO) # disable echo on client terminal (data still sending)
         self.will(telnet.SGA) # supress SGA
-        
         #self.do(telnet.LINEMODE) # disable line buffer mode
         
-        self.factory.connections = self.factory.connections + 1
+        print repr(self.transport.getPeer()), "connected."
         
-        print repr(self.transport.getPeer())
-        
-        bbs.setMe(self.transport.getPeer())
-        
-        # set protocol
-        term.instance.setProtocol(self)
+        self.conn = bbs.BBS(self.transport.getPeer())
         
         # push the login screenlet
-        bbs.push(screenlet.login)
+        self.conn.push(screenlet.login, term.Term(self))
         
     def enableRemote(self, option):
         print 'enableRemote', repr(option)
@@ -92,15 +87,15 @@ class Protocol(telnet.Telnet):
     def dataReceived(self, data):
         print "raw:", repr(data)
         if self.filter(data):
-            bbs.dataReceived(data)
+            self.conn.dataReceived(data)
     """
     def applicationDataReceived(self, data):
         print "data:", repr(data), data
         self.b.dataReceived(data)
     """    
     def connectionLost(self, reason):
+        self.factory.connections = self.factory.connections + 1
         print reason
-        self.factory.connections = self.factory.connections - 1
         #bbs.cleanup(self.transport.getHost().host)
 
 class BBSFactory(protocol.ServerFactory):
