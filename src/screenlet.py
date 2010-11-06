@@ -23,7 +23,7 @@ from twisted.internet import reactor, defer
 from time import localtime
 import codecs
 
-
+import term
 from term import Colors
 from term import Align
 
@@ -39,116 +39,122 @@ tab_key = '\t'
 shift_key = '' # it doesn't send
 
 class screenlet(object):
-    def __init__(self, t):
+    def __init__(self):
         self.state = 0
+        self.calls = 0
         self.billboard = []
         self.header = []
         self.content = []
         self.footer = []
-        self.term = t
         
     def changeState(self, to):
         self.state = to
         self.calls = 0
-        self.term.clr_scr()
+        term.instance.clr_scr()
+        self.update()
 
     def update(self, data=''):
         # turn off line buffer mode
-        self.term.setLineMode(False)
+        term.instance.setLineMode(False)
 
     def isKey(self, input, key):
         return len(input) == len(key) and input == key
         
-    def drawScr(self, dir):
-        self.term.clr_scr()
-        detect = UniversalDetector()
-        """
-        for line in open(dir).readlines():
-            detect.feed(line)
-            if detect.done:
-                break
-        detect.close()
-        print detect.result
-        """
-        #codecs.open(dir, 'r', 'cp437')
-        for i, line in enumerate(open(dir)):
-            self.term.put(i+1, 0, line)
+    def drawScr(self, dir, force=False):
+        if self.calls == 0 or force:
+            term.instance.clr_scr()
+            detect = UniversalDetector()
+            """
+            for line in open(dir).readlines():
+                detect.feed(line)
+                if detect.done:
+                    break
+            detect.close()
+            print detect.result
+            """
+            #codecs.open(dir, 'r', 'cp437')
+            for i, line in enumerate(open(dir)):
+                term.instance.put(i+1, 0, line)
 
 
 class login(screenlet):
-    def __init__(self, t):    
+    def __init__(self):    
         self.id = ''
         self.pw = '' 
         
         self.state = 0
         self.calls = 0
         
-        super(login, self).__init__(t)
+        super(login, self).__init__()
     
     # the methodology behind this is always static first, always the lowest layer first, think of layers, paint the least
     # dynamic layer first
     def update(self, data=''):
         
         # draw background
-        if self.calls == 0:
-            self.drawScr("../res/Welcome_login")
+        self.drawScr("../res/Welcome_login")
     
         #mon = str(localtime().tm_mon)
         #reactor.callLater(1, fn, 0)
    
-        self.term.put(22, 0, "觀光局邀您分享遊記、相片，福斯汽車、百萬獎勵讓您玩遍台灣!http://ppt.cc/w4vV")
+        term.instance.put(23, 0, "觀光局邀您分享遊記、相片，福斯汽車、百萬獎勵讓您玩遍台灣!http://ppt.cc/w4vV")
         if self.state == 1:
-                self.term.put(22, 0, "請輸入密碼： ")
+                term.instance.put(22, 0, "請輸入密碼： ")
         
-        self.term.put(21, 0, "請輸入代號，或以 guest 參觀，或以 new 註冊： ") # offset 45
+        term.instance.put(21, 0, "請輸入帳號，或以 guest 參觀，或以 new 註冊： ") # offset 45
         
         
         
         if self.state == 0:
-            self.term.ready_for_input(13, 21, 45)
+            term.instance.ready_for_input(13, 21, 45)
         elif self.state == 1:
-            self.term.ready_for_input(20, 22, 13, False)
+            term.instance.ready_for_input(20, 22, 13, False)
         
         if self.isKey(data, return_key): # return pressed
             if self.state == 0: # user id
-                self.id = self.term.input
-                if bbs.check_userid(self.id) == 0: # 0 success
-                    self.changeState(1) # now check password
-                    self.term.finish_for_input()
-                    self.update()
-                else:
-                    pass # have to show warning somehow
+                self.id = term.instance.input
+                if self.id == "new":
+                    bbs.push(registration)
+                    return
+                term.instance.finish_for_input()
+                self.changeState(1)
+                
             else: # password
-                self.pw = self.term.input
-                if bbs.check_pw(self.pw) == 0:
-                    self.term.print_input()
-                    self.term.finish_for_input()
-                    bbs.push(welcome, self.term) 
+                self.pw = term.instance.input
+                if bbs.user_lookup(self.id, self.pw) == 0: # 0 success
+                    term.instance.print_input()
+                    term.instance.finish_for_input()
+                    bbs.push(welcome)
                     return
                 else:
+                    term.instance.finish_for_input()
                     self.changeState(0)
-                    self.term.finish_for_input()
-                    self.update()
+                    term.instance.put(22, 0, "帳號或密碼有錯誤，請重新輸入。")
         elif self.isKey(data, backspace_key): # backspace pressed 
             print repr(self.id)
-            self.term.backspace_input()
+            term.instance.backspace_input()
         elif self.isKey(data, arrow_up_key):
             pass
         elif self.isKey(data, arrow_down_key):
             pass
         elif self.isKey(data, arrow_right_key):
-            self.term.move_right_input()
+            term.instance.move_right_input()
         elif self.isKey(data, arrow_left_key):
-            self.term.move_left_input()
+            term.instance.move_left_input()
         else:
-            self.term.add_to_input(data)
+            term.instance.add_to_input(data)
 
-        self.term.hide_cursor() # doesn't work QQ
-        self.term.print_input()
+        term.instance.hide_cursor() # doesn't work QQ
+        term.instance.print_input()
         
         self.calls = self.calls + 1
         
 class welcome(screenlet):
     def update(self, data=''):
-        # clear the screen
+        # draw background
         self.drawScr("../res/whitemail")
+        
+class registration(screenlet):
+    def update(self, data=''):
+        # draw background
+        self.drawScr("../res/register")

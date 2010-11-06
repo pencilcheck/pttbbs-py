@@ -33,18 +33,12 @@ parser.add_argument('-d', '--daemon', action='store_true', help='Launch in Daemo
 parser.add_argument('-t', '--tunnel', help='Tunnel Mode', default='telnet')
 parser.add_argument('-p', '--port', help='Listen port', type=int, default='9090')
 parser.add_argument('-b', '--base', help='Host url', default='127.0.0.1')
-parser.add_argument('-e', '--encode', help='Character Encoding', default='big5')
+#parser.add_argument('-e', '--encode', help='Character Encoding', default='big5')
 
 args = parser.parse_args()
 
-print args
-print args.base
+me = '127.0.0.1'
 
-# Database connection
-db.DB('users.db')
-
-# BBS load external templates
-bbs.loadExtScreenlets()
 
 # Set up server protocol
 class Protocol(telnet.Telnet):
@@ -61,10 +55,17 @@ class Protocol(telnet.Telnet):
         
         #self.do(telnet.LINEMODE) # disable line buffer mode
         
-        self.factory.connections = self.factory.connections + 1    
+        self.factory.connections = self.factory.connections + 1
+        
+        print repr(self.transport.getPeer())
+        
+        bbs.setMe(self.transport.getPeer())
+        
+        # set protocol
+        term.instance.setProtocol(self)
         
         # push the login screenlet
-        bbs.push(screenlet.login, term.Term(self))
+        bbs.push(screenlet.login)
         
     def enableRemote(self, option):
         print 'enableRemote', repr(option)

@@ -17,10 +17,13 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 from time import sleep
 from time import clock
-        
+
+import db
+
+me = '127.0.0.1'
+
 view_stack = []
 view_cache = []
         
@@ -36,15 +39,14 @@ def cleanup():
 def dataReceived(data):
     view_stack[-1].update(data)
 
-def loadExtScreenlets():
-    return
+def setMe(ip):
+    me = ip
 
-def push(screenlet, term):
-    inst = screenlet(term)
-    if inst.__class__.__name__ in view_cache:
-        view_stack.append(view_cache[inst.__class__.__name__])
+def push(screenlet):
+    if screenlet.__class__.__name__ in view_cache:
+        view_stack.append(view_cache[screenlet.__class__.__name__])
     else:
-        view_stack.append(inst)
+        view_stack.append(screenlet())
     view_stack[len(view_stack)-1].update()
 
 def pop():
@@ -55,10 +57,11 @@ def pop():
     
 # ------------------------------------------
 # below are functions for screenlets to db
+
+
+def user_lookup(userid, password):
+    print 'looking up account for this guy', me
     
-
-def check_userid(userid):
+    db.instance
+    
     return 0
-
-def check_pw(userid):
-    return -1

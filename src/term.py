@@ -115,23 +115,24 @@ delim = ';'
 prefix = '\x1b['
 end = 'm'
 
+width   = 80
+height  = 22
+
 # easier if this is a singleton
 class Term:
     
-    def __init__(self, pro, w=80, h=22):
+    def __init__(self):
         self.temp = []
-        
-        self.width = w
-        self.height = h
-        
-        self.protocol = pro
         
         self.echo = True
         
         self.cursor_line = 0
         self.cursor_coln = 0
         
-        self.ready = False
+        self.ready = False    
+        
+    def setProtocol(self, pro):
+        self.protocol = pro
 
     def setLineMode(self, enable):
         self.protocol.setLineMode(enable)
@@ -259,7 +260,7 @@ class Term:
         if maxLen < len(msg):
             return msg
         
-        #remains = self.width - self.cursor_coln
+        #remains = width - self.cursor_coln
         remains = maxLen
         
         ret = ''
@@ -275,3 +276,5 @@ class Term:
     # assuming len(msg) and maxLen are both < width 
     def format(self, light, fg_color, bg_color, msg, maxLen, alignment=Align.Left):
         return self.escape_sequence(light, fg_color, bg_color) + self.adjust(alignment, msg, maxLen) + color_reset
+    
+instance = Term()
