@@ -1,4 +1,4 @@
-# -*- encoding: BIG5 -*-
+# -*- encoding: UTF8 -*-
 
 ## Ptt BBS python rewrite
 ##
@@ -58,7 +58,7 @@ class screenlet(object):
         term.instance.setLineMode(False)
 
     def anyKey(self, data, screenlet):
-        term.instance.format_put(term.height, 0, "«öÀH·NÁä¸õ¥X", term.width,
+        term.instance.format_put(term.height, 0, "æŒ‰éš¨æ„éµè·³å‡º", term.width,
                                  True, Colors.Cyan, Colors.Blue, Align.Center)
         
         if len(data) > 0:
@@ -106,11 +106,11 @@ class login(screenlet):
         #mon = str(localtime().tm_mon)
         #reactor.callLater(1, fn, 0)
    
-        term.instance.put(23, 0, "Æ[¥ú§½ÁÜ±z¤À¨É¹C°O¡B¬Û¤ù¡AºÖ´µ¨T¨®¡B¦Ê¸U¼úÀyÅı±zª±¹M¥xÆW!http://ppt.cc/w4vV")
+        term.instance.put(23, 0, "è§€å…‰å±€é‚€æ‚¨åˆ†äº«éŠè¨˜ã€ç›¸ç‰‡ï¼Œç¦æ–¯æ±½è»Šã€ç™¾è¬çå‹µè®“æ‚¨ç©éå°ç£!http://ppt.cc/w4vV")
         if self.state == 1:
-                term.instance.put(22, 0, "½Ğ¿é¤J±K½X¡G ")
+                term.instance.put(22, 0, "è«‹è¼¸å…¥å¯†ç¢¼ï¼š ")
         
-        term.instance.put(21, 0, "½Ğ¿é¤J±b¸¹¡A©Î¥H guest °ÑÆ[¡A©Î¥H new µù¥U¡G ") # offset 45
+        term.instance.put(21, 0, "è«‹è¼¸å…¥å¸³è™Ÿï¼Œæˆ–ä»¥ guest åƒè§€ï¼Œæˆ–ä»¥ new è¨»å†Šï¼š ") # offset 45
         
         
         
@@ -142,7 +142,7 @@ class login(screenlet):
                 else:
                     term.instance.finish_for_input()
                     self.changeState(0)
-                    term.instance.put(22, 0, "±b¸¹©Î±K½X¦³¿ù»~¡A½Ğ­«·s¿é¤J¡C")
+                    term.instance.put(22, 0, "å¸³è™Ÿæˆ–å¯†ç¢¼æœ‰éŒ¯èª¤ï¼Œè«‹é‡æ–°è¼¸å…¥ã€‚")
         elif self.isKey(data, backspace_key): # backspace pressed 
             print repr(self.id)
             term.instance.backspace_input()
