@@ -57,8 +57,17 @@ class screenlet(object):
         # turn off line buffer mode
         term.instance.setLineMode(False)
 
+    def anyKey(self, data, screenlet):
+        term.instance.format_put(term.height, 0, "«öÀH·NÁä¸õ¥X", term.width,
+                                 True, Colors.Cyan, Colors.Blue, Align.Center)
+        
+        if len(data) > 0:
+            bbs.pop(False)
+            bbs.push(screenlet)
+            return
+
     def isKey(self, input, key):
-        return len(input) == len(key) and input == key
+        return input[0] == key[0] or len(input) == len(key) and input == key 
         
     def drawScr(self, dir, force=False):
         if self.calls == 0 or force:
@@ -116,6 +125,10 @@ class login(screenlet):
                 if self.id == "new":
                     bbs.push(registration)
                     return
+                if self.id == "guest":
+                    bbs.user_lookup(self.id, self.pw) # just to associate guest with IP
+                    bbs.push(welcome)
+                    return
                 term.instance.finish_for_input()
                 self.changeState(1)
                 
@@ -153,8 +166,14 @@ class welcome(screenlet):
     def update(self, data=''):
         # draw background
         self.drawScr("../res/whitemail")
+        self.anyKey(data, menus)
         
 class registration(screenlet):
     def update(self, data=''):
         # draw background
         self.drawScr("../res/register")
+        
+class menus(screenlet):
+    def update(self, data=''):
+        # draw background
+        self.drawScr("../res/editable")

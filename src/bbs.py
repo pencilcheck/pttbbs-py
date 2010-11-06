@@ -17,8 +17,8 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from time import sleep
-from time import clock
+import pickle
+from time import strftime, localtime
 
 import db
 
@@ -42,16 +42,19 @@ def dataReceived(data):
 def setMe(ip):
     me = ip
 
-def push(screenlet):
+def push(screenlet, selfdestruct=False):
+    if selfdestruct: # pop the caller
+        view_stack.pop()
     if screenlet.__class__.__name__ in view_cache:
         view_stack.append(view_cache[screenlet.__class__.__name__])
     else:
         view_stack.append(screenlet())
     view_stack[len(view_stack)-1].update()
 
-def pop():
+def pop(show=True):
     view_cache[view_stack[len(view_stack)-1].__class__.__name__] = view_stack.pop()
-    view_stack[len(view_stack)-1].update()
+    if pop:
+        view_stack[len(view_stack)-1].update()
     
     
     
@@ -62,6 +65,31 @@ def pop():
 def user_lookup(userid, password):
     print 'looking up account for this guy', me
     
-    db.instance
+    if userid == "guest":
+        db.instance.cursor.execute('select * from users where UId=?', (userid,))
+        for row in db.instance.cursor:
+            print repr(row[2])
+            if row[2] == None:
+                tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),me)]
+                dict = (pickle.dumps(tmp),userid,)
+            else:
+                tmp = pickle.loads(str(row[2]))
+                tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),me))
+                dict = (pickle.dumps(tmp),userid,)
+            print dict
+            db.instance.cursor.execute('update users set IPs=? where UId=?', dict)
+        
+        # update acl
+        acl = 0
+    else:
+        # Do this instead
+        t = (userid,password,)
+        db.instance.cursor.execute('select * from users where UId=? and PW=?', t)
+        for row in db.instance.cursor:
+            print row
+        
+        # update acl
+        acl = 0
+    db.instance.commit()
     
     return 0

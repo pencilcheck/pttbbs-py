@@ -116,7 +116,7 @@ prefix = '\x1b['
 end = 'm'
 
 width   = 80
-height  = 22
+height  = 24
 
 # easier if this is a singleton
 class Term:

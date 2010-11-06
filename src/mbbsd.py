@@ -38,7 +38,7 @@ parser.add_argument('-b', '--base', help='Host url', default='127.0.0.1')
 args = parser.parse_args()
 
 me = '127.0.0.1'
-
+acl = 0
 
 # Set up server protocol
 class Protocol(telnet.Telnet):

@@ -33,46 +33,59 @@ class DB:
         self.exist = os.path.exists(DB_PATH)
         
         self.conn = sqlite3.connect(DB_PATH)
+        self.cursor = self.conn.cursor()
         if not self.exist:
             self.create()
+            self.commit()
     
     def create(self):
-        c = self.conn.cursor()
-        
+    
         users =      """CREATE TABLE Users
                         (
-                         UId char(255) NOT NULL PRIMARY KEY IDENTITY,
-                         IPs char(15) NOT NULL,
-                         ACL int NOT NULL,
-                         Location varchar(255) NOT NULL,
-                         Mood varchar(255),
-                         IdleTime datetime2,    
-                         LoginTime date NOT NULL,
-                         LoginDuration datetime2,
-                         Sex char(1),
-                         Birthday,
-                         LastName varchar(255) NOT NULL,
-                         FirstName varchar(255),
-                         HomePhone varchar(255),
-                         WorkPhone varchar(255),
-                         Address varchar(255),
-                         City varchar(255)
+                         UId TEXT UNIQUE NOT NULL,
+                         PW TEXT,
+                         IPs TEXT,
+                         ACL INTEGER NOT NULL,
+                         Location TEXT,
+                         Avatar TEXT,
+                         Mood TEXT,
+                         IdleTime TEXT,    
+                         LoginTime TEXT,
+                         LoginDuration TEXT,
+                         Sex TEXT,
+                         Birthday TEXT,
+                         LastName TEXT,
+                         FirstName TEXT,
+                         HomePhone TEXT,
+                         WorkPhone TEXT,
+                         Address TEXT,
+                         City TEXT
                         )"""
         relations =  """CREATE TABLE Relations
                         (
-                         Id char(255) NOT NULL PRIMARY KEY IDENTITY,
-                         UId char(255) NOT NULL,
-                         FId char(255),
-                         Status NOT NULL
+                         UId TEXT NOT NULL,
+                         FId TEXT,
+                         Status TEXT NOT NULL
                         )"""
+        
+        guest =      """INSERT INTO
+                        users(
+                                UId,
+                                ACL
+                        ) 
+                        VALUES (
+                                \"guest\",
+                                0                         
+                        )"""
+        
+        self.cursor.execute(users)
+        self.cursor.execute(relations)
+        self.cursor.execute(guest)
     
     def commit(self):
         self.conn.commit()
     
     def close(self):
-        self.conn.close()
-    
-    def getCursor(self):
-        return self.conn.cursor()    
+        self.cursor.close()    
     
 instance = DB()
