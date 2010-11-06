@@ -46,7 +46,7 @@ class BBS:
     
     def push(self, screenlet, term, selfdestruct=False):
         if selfdestruct: # pop the caller
-            self.view_stack.pop()
+            self.view_stack.pop(False)
         """
         if screenlet.__class__.__name__ in self.view_cache:
             self.view_stack.append(self.view_cache[screenlet.__class__.__name__])
@@ -58,7 +58,8 @@ class BBS:
         self.view_stack[len(self.view_stack)-1].update()
     
     def pop(self, show=True):
-        self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
+        self.view_stack.pop(False)
+        #self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
         if show:
             self.view_stack[len(self.view_stack)-1].update()
         

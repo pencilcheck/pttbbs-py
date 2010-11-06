@@ -64,8 +64,8 @@ class screenlet(object):
                                  True, Colors.Cyan, Colors.Blue, Align.Center)
         
         if len(data) > 0:
-            bbs.pop(False)
-            bbs.push(screenlet)
+            self.bbs.pop(False)
+            self.bbs.push(screenlet, self.buff)
             return
 
     def isKey(self, input, key):
@@ -168,7 +168,7 @@ class welcome(screenlet):
     def update(self, data=''):
         # draw background
         self.drawScr("../res/whitemail")
-        self.anyKey(data, menus)
+        self.anyKey(data, login)
         
 class registration(screenlet):
     def update(self, data=''):
