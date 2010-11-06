@@ -1,4 +1,4 @@
-# -*- encoding: BIG5 -*-
+# -*- encoding: UTF8 -*-
 
 ## Ptt BBS python rewrite
 ##
@@ -41,7 +41,10 @@ print args
 print args.base
 
 # Database connection
-db.load()
+db.DB('users.db')
+
+# BBS load external templates
+bbs.loadExtScreenlets()
 
 # Set up server protocol
 class Protocol(telnet.Telnet):
@@ -60,12 +63,8 @@ class Protocol(telnet.Telnet):
         
         self.factory.connections = self.factory.connections + 1    
         
-        self.b = bbs.BBS(term.Term(self), db)
-        
-        # BBS load external templates
-        self.b.loadExtScreenlets()
-        
-        self.b.push(screenlet.login) # push the login screenlet
+        # push the login screenlet
+        bbs.push(screenlet.login, term.Term(self))
         
     def enableRemote(self, option):
         print 'enableRemote', repr(option)
@@ -73,12 +72,31 @@ class Protocol(telnet.Telnet):
 
     def disableRemote(self, option):
         print 'disableRemote', repr(option)
-
-    def applicationDataReceived(self, data):
-        print "data:", data
-        self.b.dataReceived(data)
-            
+    
+    def filter(self, data):
+        ret = True
         
+        if chr(255) in data:
+            ret = False
+        """ 
+        for i in data:
+            try:
+                print term.commands[i]
+            except:
+                pass
+        """
+        
+        return ret      
+            
+    def dataReceived(self, data):
+        print "raw:", repr(data)
+        if self.filter(data):
+            bbs.dataReceived(data)
+    """
+    def applicationDataReceived(self, data):
+        print "data:", repr(data), data
+        self.b.dataReceived(data)
+    """    
     def connectionLost(self, reason):
         print reason
         self.factory.connections = self.factory.connections - 1

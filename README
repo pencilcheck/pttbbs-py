@@ -6,7 +6,7 @@ pttbbs-py project
 如果你對這有興趣、想要幫忙，都歡迎下載、修改這裡所有的程式碼。
 
 執行手冊：
-    *由於目前pttbbs-py使用twisted以及argparse，建議如果跑不動請先用easy_install安裝。
+    *由於目前pttbbs-py使用twisted、chardet以及argparse，建議如果跑不動請先用easy_install安裝。
 
 大計畫：
     *Integrate Cython

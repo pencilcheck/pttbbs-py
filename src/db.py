@@ -1,3 +1,5 @@
+# -*- encoding: UTF8 -*-
+
 ## Ptt BBS python rewrite
 ##
 ## This is the model of MVC architecture
@@ -17,24 +19,24 @@
 
 import sqlite3
 
-DB_USERS_PATH = object
-conn = object
-
-# tables: users, posts     
-# fields for users: ip, login time, 
-# fields for posts:  
+# make singleton
+class DB:
+   
+    # tables: users, posts     
+    # fields for users: IP, login time, login duration, ACL, scr, mood, idle, sex, friends, banlist, birthday date, contact info (like phone number, address)    
+    # fields for posts: post time, author, board, title, type, history, attach (給推用的)
+        
+    def __init__(self, path):
+        # create db if not exist already
+        
+        self.DB_USERS_PATH = path
+        self.conn = sqlite3.connect(self.DB_USERS_PATH)
     
-def load(path='users.db'):
-    # create db if not exist already
+    def commit(self):
+        self.conn.commit()
     
-    DB_USERS_PATH = path
-    conn = sqlite3.connect(DB_USERS_PATH)
-
-def commit(self):
-    conn.commit()
-
-def close(self):
-    conn.close()
-
-def getCursor(self):
-    return conn.cursor()    
+    def close(self):
+        self.conn.close()
+    
+    def getCursor(self):
+        return self.conn.cursor()    

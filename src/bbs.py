@@ -1,3 +1,5 @@
+# -*- encoding: UTF8 -*-
+
 ## Ptt BBS python rewrite
 ##
 ## This is the controller of MVC architecture
@@ -16,47 +18,47 @@
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-class BBS:
-
-    def __init__(self, t, d):
-        self.term = t
-        self.db = d
+from time import sleep
+from time import clock
         
-        self.view_stack = []
-        self.view_cache = []
+view_stack = []
+view_cache = []
         
-        lookup = [{}]
+lookup = [{}]
     
-    # need a method to put into event loop in interval for animation stuff
-    def update(self):
-        return
-    
-    def cleanup(self, ip):
-        return
-    
-    def dataReceived(self, data):
-        self.view_stack[-1].update(data)
-    
-    def loadExtScreenlets(self):
-        return
-    
-    def push(self, screenlet):
-        inst = screenlet(self.term)
-        if inst.__class__.__name__ in self.view_cache:
-            self.view_stack.append(self.view_cache[inst.__class__.__name__])
-        else:
-            self.view_stack.append(inst)
-        self.view_stack[len(self.view_stack)-1].update()
-    
-    def pop(self):
-        self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
-        self.view_stack[len(self.view_stack)-1].update()
-    
-    
-    
-    # ------------------------------------------
-    # below are functions for screenlets to db
-    
-    
-def check_userid(userid):
+# need a method to put into event loop in interval for animation stuff
+def update():
     return
+
+def cleanup():
+    return
+
+def dataReceived(data):
+    view_stack[-1].update(data)
+
+def loadExtScreenlets():
+    return
+
+def push(screenlet, term):
+    inst = screenlet(term)
+    if inst.__class__.__name__ in view_cache:
+        view_stack.append(view_cache[inst.__class__.__name__])
+    else:
+        view_stack.append(inst)
+    view_stack[len(view_stack)-1].update()
+
+def pop():
+    view_cache[view_stack[len(view_stack)-1].__class__.__name__] = view_stack.pop()
+    view_stack[len(view_stack)-1].update()
+    
+    
+    
+# ------------------------------------------
+# below are functions for screenlets to db
+    
+
+def check_userid(userid):
+    return 0
+
+def check_pw(userid):
+    return -1
