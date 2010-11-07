@@ -241,7 +241,6 @@ class menus(screenlet):
         
         hi = 0
         for i, line in enumerate(open('../../res/topmenu2')):
-            print hi
             if line.strip() == '':
                 continue
             self.buff.format_put(i , 0, line.strip(), term.width, align=Align.Center, highlight=True if self.cursor == hi else False)
@@ -312,7 +311,6 @@ class discussionboard(screenlet):
         
         hi = 0
         for i, line in enumerate(open('../../res/boardlist')):
-            print hi
             if line.strip() == '':
                 continue
             self.buff.format_put(i , 0, line.strip(), term.width, align=Align.Center, highlight=True if self.cursor == hi else False)
