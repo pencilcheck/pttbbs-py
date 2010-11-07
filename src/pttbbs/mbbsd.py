@@ -90,13 +90,15 @@ def handle_socket(sock):
         # push the login screenlet
         conn.push(screenlet.login, term.Term(sock))
         
+        sock.recv(4096)
+
+        
         while True:
-            data = sock.recv(4096) # 4096 bytes buffer
+            data = sock.recv(3) # 4096 bytes buffer
             if not data:
                 break
             
-            if filter(data):
-                conn.dataReceived(data)
+            conn.dataReceived(data)
             print "sending from client", sock, repr(data)
             #sock.sendall(data) # this is a simple echo sock :)
     except:

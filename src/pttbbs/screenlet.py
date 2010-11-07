@@ -65,22 +65,24 @@ class screenlet(object):
         #self.buff.setLineMode(False)
         
         self.header(data)
-        
-        self.content(data)
-        
         self.footer(data)
+        self.content(data)
 
     def anyKey(self, data, screenlet):
         self.buff.format_put(term.height, 0, "按隨意鍵跳出", term.width,
                                  True, Colors.Cyan, Colors.Blue, Align.Center)
         
         if len(data) > 0:
+            if screenlet == 'prev':
+                self.bbs.pop()
+                return
+            
             self.bbs.pop(False)
             self.bbs.push(screenlet, self.buff)
             return
 
     def isKey(self, input, key):
-        return len(input) == len(key) and input == key
+        return repr(input) == repr(key)
     
     def drawScr(self, strings, force=False):
         if self.calls == 0 or force:
@@ -135,11 +137,11 @@ class login(screenlet):
             if self.state == 0: # user id
                 self.id = self.buff.input
                 if self.id == "new":
-                    self.bbs.push(registration, self.buff)
+                    self.bbs.push(registration, self.buff, True)
                     return
                 if self.id == "guest":
                     self.bbs.user_lookup(self.id, self.pw) # just to associate guest with IP
-                    self.bbs.push(welcome, self.buff)
+                    self.bbs.push(welcome, self.buff, True)
                     return
                 self.buff.finish_for_input()
                 self.changeState(1)
@@ -149,7 +151,7 @@ class login(screenlet):
                 if self.bbs.user_lookup(self.id, self.pw) == 0: # 0 success
                     #self.buff.print_input()
                     self.buff.finish_for_input()
-                    self.bbs.push(welcome, self.buff)
+                    self.bbs.push(welcome, self.buff, True)
                     return
                 else:
                     self.buff.finish_for_input()
@@ -166,7 +168,11 @@ class login(screenlet):
         elif self.isKey(data, arrow_left_key):
             self.buff.move_left_input()
         else:
-            self.buff.add_to_input(data)
+            # BIG5
+            # ascii
+            if data and '\xa1' <= data <= '\xf9' \
+            or '\x1f' < data < '\x7f' :
+                self.buff.add_to_input(data)
 
         self.buff.hide_cursor() # doesn't work QQ
         self.buff.print_input()
@@ -227,9 +233,20 @@ class menus(screenlet):
         elif self.isKey(data, arrow_left_key):
             pass
         elif self.isKey(data, arrow_right_key) or self.isKey(data, return_key):
-            self.bbs.push(discussionboard, self.buff)
+            if self.cursor == 2:
+                self.bbs.push(discussionboard, self.buff)
+            else:
+                self.bbs.push(notfinished, self.buff)
             return
         
+        hi = 0
+        for i, line in enumerate(open('../../res/topmenu2')):
+            print hi
+            if line.strip() == '':
+                continue
+            self.buff.format_put(i , 0, line.strip(), term.width, align=Align.Center, highlight=True if self.cursor == hi else False)
+            hi = hi + 1
+        """
         self.buff.format_put(5 , 0, "(A)nnouncement 【 精華公佈欄 】", term.width, align=Align.Center, highlight=True if self.cursor == 0 else False)
         self.buff.format_put(6 , 0, "(F)avorites    【 我的最愛區 】", term.width, align=Align.Center, highlight=True if self.cursor == 1 else False)
         self.buff.format_put(7 , 0, "(B)oard        【 分組討論區 】", term.width, align=Align.Center, highlight=True if self.cursor == 2 else False)
@@ -240,9 +257,63 @@ class menus(screenlet):
         self.buff.format_put(12, 0, "(E)ntertainment【 娛樂與休閒 】", term.width, align=Align.Center, highlight=True if self.cursor == 7 else False)
         self.buff.format_put(13, 0, "(L)ist         【 編特別名單 】", term.width, align=Align.Center, highlight=True if self.cursor == 8 else False)
         self.buff.format_put(14, 0, "(Q)uit            離開，再見… ", term.width, align=Align.Center, highlight=True if self.cursor == 9 else False)
-        
-class discussionboard(screenlet):
+        """
+class notfinished(screenlet):
     def content(self, data=''):
         # draw background
-        self.drawScrFromFile("../../res/boardlist.help")
-        self.anyKey(data, login)
+        self.drawScrFromFile("../../res/notfinished")
+        self.anyKey(data, 'prev')
+        
+class discussionboard(screenlet):
+    def __init__(self, term, bbs):    
+        self.cursor = 0 
+        
+        super(discussionboard, self).__init__(term, bbs)
+    
+    def header(self, data=''):
+        if self.state == 0:
+            title = "【 主功能表 】"
+        site = "批踢踢py實業坊"
+        self.buff.format_put(0, 0, site, term.width,
+                                 True, Colors.Yellow, Colors.Blue, Align.Center)
+        self.buff.format_put(0, 0, title, 20,
+                                 True, Colors.White, Colors.Blue)
+        
+        
+    def footer(self, data=''):
+        time = "現在時間"
+        constellation = "星座"
+        online = "線上1人"
+        id = "我是" + self.bbs.id
+        self.buff.format_put(term.height, 0, time, 20,
+                                 True, Colors.Cyan, Colors.Blue, Align.Center)
+        self.buff.format_put_on_cursor(constellation, 20,
+                                 True, Colors.Cyan, Colors.Blue, Align.Center)
+        self.buff.format_put_on_cursor(online, 20,
+                                 True, Colors.Cyan, Colors.Blue, Align.Center)
+        self.buff.format_put_on_cursor(id, 10,
+                                 True, Colors.Cyan, Colors.Blue, Align.Center)
+        
+        
+    def content(self, data=''):
+        # draw background
+        if self.isKey(data, arrow_up_key):
+            if self.cursor > 0:
+                self.cursor = self.cursor - 1
+        elif self.isKey(data, arrow_down_key):
+            if self.cursor < 14:
+                self.cursor = self.cursor + 1
+        elif self.isKey(data, arrow_left_key):
+            self.bbs.pop()
+            return
+        elif self.isKey(data, arrow_right_key) or self.isKey(data, return_key):
+            self.bbs.push(notfinished, self.buff)
+            return
+        
+        hi = 0
+        for i, line in enumerate(open('../../res/boardlist')):
+            print hi
+            if line.strip() == '':
+                continue
+            self.buff.format_put(i , 0, line.strip(), term.width, align=Align.Center, highlight=True if self.cursor == hi else False)
+            hi = hi + 1

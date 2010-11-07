@@ -51,14 +51,16 @@ class BBS:
         """
         term.clr_scr()
         self.view_stack.append(screenlet(term, self))
-        self.view_stack[len(self.view_stack)-1].update()
+        self.view_stack[-1].update()
     
     def pop(self, show=True):
-        self.view_stack.pop(False)
-        #self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
-        if show:
-            self.view_stack[len(self.view_stack)-1].buff.clr_scr()
-            self.view_stack[len(self.view_stack)-1].update()
+        print self.view_stack
+        if len(self.view_stack) > 0:
+            self.view_stack.pop()
+            #self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
+            if show:
+                self.view_stack[-1].buff.clr_scr()
+                self.view_stack[-1].update()
         
         
         
@@ -82,18 +84,25 @@ class BBS:
                     dict = (pickle.dumps(tmp),userid,)
                 print dict
                 db.instance.cursor.execute('update users set IPs=? where UId=?', dict)
-            
-            # update acl
-            acl = 0
+                db.instance.commit()
+                return 0
         else:
             # Do this instead
             t = (userid,password,)
             db.instance.cursor.execute('select * from users where UId=? and PW=?', t)
             for row in db.instance.cursor:
-                print row
-            
-            # update acl
-            acl = 0
-        db.instance.commit()
+                print repr(row[2])
+                if row[2] == None:
+                    tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0])]
+                    dict = (pickle.dumps(tmp),userid,)
+                else:
+                    tmp = pickle.loads(str(row[2]))
+                    tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0]))
+                    dict = (pickle.dumps(tmp),userid,)
+                print dict
+                db.instance.cursor.execute('update users set IPs=? where UId=?', dict)
+                db.instance.commit()
+                return 0
+        return -1
         
-        return 0
+        
