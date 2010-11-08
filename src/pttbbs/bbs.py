@@ -1,5 +1,3 @@
-# -*- encoding: UTF8 -*-
-
 ## Ptt BBS python rewrite
 ##
 ## This is the controller of MVC architecture
@@ -21,6 +19,7 @@ import pickle
 from time import strftime, localtime
 
 import db
+import screenlet
 
 class BBS:
     
@@ -40,26 +39,27 @@ class BBS:
     def dataReceived(self, data):
         self.view_stack[-1].update(data)
     
-    def push(self, screenlet, term, selfdestruct=False):
+    def push(self, screen, t, selfdestruct=False):
+        print "push", self.view_stack
         if selfdestruct: # pop the caller
-            self.view_stack.pop(False)
+            self.pop(False)
         """
         if screenlet.__class__.__name__ in self.view_cache:
             self.view_stack.append(self.view_cache[screenlet.__class__.__name__])
         else:
             self.view_stack.append(screenlet())
         """
-        term.clr_scr()
-        self.view_stack.append(screenlet(term, self))
+        self.view_stack.append(screen(t, self))
+        self.view_stack[-1].term.clr_scr()
         self.view_stack[-1].update()
     
     def pop(self, show=True):
-        print self.view_stack
+        print "pop", self.view_stack
         if len(self.view_stack) > 0:
             self.view_stack.pop()
             #self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
-            if show:
-                self.view_stack[-1].buff.clr_scr()
+            if show and len(self.view_stack) > 0:
+                self.view_stack[-1].term.clr_scr()
                 self.view_stack[-1].update()
         
         
@@ -104,5 +104,7 @@ class BBS:
                 db.instance.commit()
                 return 0
         return -1
-        
-        
+    
+    # loads board content at given level and index, either board list or thread list or threads
+    def loadBoardHierarchy(self, level, index):
+        pass

@@ -1,5 +1,3 @@
-# -*- encoding: UTF8 -*-
-
 ## Ptt BBS python rewrite
 ##
 ## This is the model of MVC architecture
@@ -27,7 +25,7 @@ class DB:
    
     # tables: users, posts     
     # fields for users: IP, login time, login duration, ACL, scr, mood, idle, sex, friends, banlist, birthday date, contact info (like phone number, address)    
-    # fields for posts: post time, author, board, title, type, history, attach (給推用的)
+    # fields for posts: post time, author, board, title, type, history, push
         
     def __init__(self):
         self.exist = os.path.exists(DB_PATH)
@@ -48,10 +46,11 @@ class DB:
                          ACL INTEGER NOT NULL,
                          Location TEXT,
                          Avatar TEXT,
+                         Signature TEXT,
                          Mood TEXT,
-                         IdleTime TEXT,    
-                         LoginTime TEXT,
-                         LoginDuration TEXT,
+                         IdleTime NUMERIC,    
+                         LoginTime NUMERIC,
+                         LoginDuration NUMERIC,
                          Sex TEXT,
                          Birthday TEXT,
                          LastName TEXT,
@@ -59,13 +58,27 @@ class DB:
                          HomePhone TEXT,
                          WorkPhone TEXT,
                          Address TEXT,
-                         City TEXT
+                         City TEXT,
+                         ReadThreads TEXT
                         )"""
         relations =  """CREATE TABLE Relations
                         (
                          UId TEXT NOT NULL,
                          FId TEXT,
                          Status TEXT NOT NULL
+                        )"""
+        boardfs =     """CREATE TABLE BoardFileSystem
+                        (
+                         Path TEXT,
+                         Type INTEGER,
+                         Title TEXT,
+                         CreationDate NUMERIC,
+                         LastModificationDate NUMERIC,
+                         ModificationDates TEXT,
+                         Content TEXT,
+                         Moderators TEXT,
+                         Author TEXT,
+                         ReplyToPath TEXT
                         )"""
         
         guest =      """INSERT INTO

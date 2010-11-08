@@ -1,5 +1,3 @@
-# -*- encoding: UTF8 -*-
-
 ## Ptt BBS python rewrite
 ##
 ## Author: Penn Su <pennsu@gmail.com>
@@ -110,7 +108,7 @@ server = socket.socket()
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
 server.bind(('', 9090))
 server.listen(500)
-print "listening for backlog 500"
+print "listening for 500 backlog"
 while True:
     try:
         new_sock, address = server.accept()
