@@ -4,7 +4,7 @@ pttbbs-py project
 
 
 執行手冊：
-    *由於目前pttbbs-py使用twisted、chardet以及argparse，建議如果跑不動請先用easy_install安裝。
+    *由於目前pttbbs-py使用gevent以及argparse，建議如果跑不動請先用easy_install安裝。要安裝gevent，你需要libevent以及greenlet。
 
 大計畫一樣：
     *Integrate Cython
