@@ -2,7 +2,7 @@
 
 ## Ptt BBS python rewrite
 ##
-## This is the model of MVC architecture but shouldn't be used directly
+## This is the view of MVC architecture but shouldn't be used directly
 ##
 ## Author: Penn Su <pennsu@gmail.com>
 ## 

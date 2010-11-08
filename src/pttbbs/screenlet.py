@@ -2,7 +2,7 @@
 
 ## Ptt BBS python rewrite
 ##
-## This is the view of MVC architecture extended from term
+## This is the view controller of MVC architecture for term
 ##
 ## Author: Penn Su <pennsu@gmail.com>
 ## 
@@ -235,6 +235,8 @@ class menus(screenlet):
         elif self.isKey(data, arrow_right_key) or self.isKey(data, return_key):
             if self.cursor == 2:
                 self.bbs.push(discussionboard, self.buff)
+            elif self.cursor == 9:
+                self.bbs.push(quit, self.buff)
             else:
                 self.bbs.push(notfinished, self.buff)
             return
@@ -257,6 +259,13 @@ class menus(screenlet):
         self.buff.format_put(13, 0, "(L)ist         【 編特別名單 】", term.width, align=Align.Center, highlight=True if self.cursor == 8 else False)
         self.buff.format_put(14, 0, "(Q)uit            離開，再見… ", term.width, align=Align.Center, highlight=True if self.cursor == 9 else False)
         """
+
+class quit(screenlet):
+    def content(self, data=''):
+        # draw background
+        self.drawScrFromFile("../../res/goodbye")
+        self.anyKey(data, 'prev')
+
 class notfinished(screenlet):
     def content(self, data=''):
         # draw background
@@ -271,7 +280,7 @@ class discussionboard(screenlet):
     
     def header(self, data=''):
         if self.state == 0:
-            title = "【 主功能表 】"
+            title = "【 功能看板 】"
         site = "批踢踢py實業坊"
         self.buff.format_put(0, 0, site, term.width,
                                  True, Colors.Yellow, Colors.Blue, Align.Center)
