@@ -42,6 +42,15 @@
 ##         4 = Blue    5 = Magenta
 ##         6 = Cyan    7 = White
 ##
+##     Black       0;30     Dark Gray     1;30
+##     Blue        0;34     Light Blue    1;34
+##     Green       0;32     Light Green   1;32
+##     Cyan        0;36     Light Cyan    1;36
+##     Red         0;31     Light Red     1;31
+##     Purple      0;35     Light Purple  1;35
+##     Brown       0;33     Yellow        1;33
+##     Light Gray  0;37     White         1;37
+##
 ##     ASCII        '\x1f' < x < '\x7f'
 ##     BIG5         '\xa1' < x < '\xf9'
 ##     UTF8         '\x4e' < x < '\x9f'
@@ -56,7 +65,23 @@ def enum(*sequential, **named):
     return type('Enum', (), enums)
 
 # color handles
-Colors = enum('Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White')
+ForegroundColors = enum(Black     =   '0;30', DarkGray    =   '1;30',
+                        Blue      =   '0;34', LightBlue   =   '1;34',
+                        Green     =   '0;32', LightGreen  =   '1;32',
+                        Cyan      =   '0;36', LightCyan   =   '1;36',
+                        Red       =   '0;31', LightRed    =   '1;31',
+                        Purple    =   '0;35', LightPurple =   '1;35',
+                        Brown     =   '0;33', Yellow      =   '1;33',
+                        LightGray =   '0;37', White       =   '1;37')
+BackgroundColors = enum(Black     =   '0;40', DarkGray    =   '1;40',
+                        Blue      =   '0;44', LightBlue   =   '1;44',
+                        Green     =   '0;42', LightGreen  =   '1;42',
+                        Cyan      =   '0;46', LightCyan   =   '1;46',
+                        Red       =   '0;41', LightRed    =   '1;41',
+                        Purple    =   '0;45', LightPurple =   '1;45',
+                        Brown     =   '0;43', Yellow      =   '1;43',
+                        LightGray =   '0;47', White       =   '1;47')
+
 Align = enum(Left='left', Center='center', Right='right')
 
 
@@ -95,29 +120,153 @@ commands = {
     chr(255):'IAC'      # Data Byte 255.  Introduces a telnet command.
 }
 
-
-
-
-clr = "\033[2J" # clear the screen
-eratocol = "\033[K" # erase to the end of line
-color_reset = '\x1b[0m' # reset color
-blink = '\x1b[5m'; # blink
+clr = '\033[2J' # clear the screen
+eratocol = '\033[K' # erase to the end of line
+underscore = '\033[4m'
+inverse = '\033[7m'
+concealed = '\033[8m' # for password, will not echo
+blink = '\033[5m'; # blink
 hide = '\033[?25l' # hide cursor
-show = '\033[?25h' # show curdasfd
+show = '\033[?25h' # show cursor
+reset = '\x1b[0m' # reset color
 
-fg = '3'
-bg = '4'
+#'\[\033[44m\]\[\033[1;31m\]'
 
-delim = ';'
+def move_cursor(row, coln):
+    return '\033[' + str(row) + ';' + str(coln) + 'H'
 
-prefix = '\x1b['
-end = 'm'
+def move_cursor_up(N):
+    return '\033[' + str(N) + 'A'
 
-width   = 80
-height  = 24
+def move_cursor_down(N):
+    return '\033[' + str(N) + 'B'
 
-# easier if this is a singleton
-class Term:
+def move_cursor_right(N):
+    return '\033[' + str(N) + 'C'
+
+def move_cursor_left(N):
+    return '\033[' + str(N) + 'D'
+
+# arguments for puts:
+# msg
+# row, coln, msg
+# or above two with keyword arguments: fg, bg, concealed
+def puts(*args, **kwargs):
+    instructions = ""
+    if len(args) == 1:
+        if 'fg' in kwargs and 'bg' in kwargs:
+            if 'concealed' in kwargs and kwargs['concealed']:
+                instructions = format(args[0], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
+            else:
+                instructions = format(args[0], fg=kwargs['fg'], bg=kwargs['bg'])
+        
+        if len(kwargs) == 0:
+            instructions = args[0]
+
+    if len(args) == 3:
+        if 'fg' in kwargs and 'bg' in kwargs:
+            if 'concealed' in kwargs and kwargs['concealed']:
+                instructions = move_cursor(args[0], args[1]) + format(args[2], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
+            else:
+                instructions = move_cursor(args[0], args[1]) + format(args[2], fg=kwargs['fg'], bg=kwargs['bg'])
+        
+        if len(kwargs) == 0:
+            instructions = move_cursor(args[0], args[1]) + args[2]
+            
+    return instructions
+
+# arguments for format_puts:
+# msg, length, align
+# row, coln, msg, length, align
+# or above two with keyword arguments: fg, bg, concealed
+def format_puts(*args, **kwargs):
+    instructions = ""
+    if len(args) == 3:
+        if 'fg' in kwargs and 'bg' in kwargs:
+            if 'concealed' in kwargs and kwargs['concealed']:
+                instructions = format(args[0], args[1], args[2], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
+            else:
+                instructions = format(args[0], args[1], args[2], fg=kwargs['fg'], bg=kwargs['bg'])
+        
+        if len(kwargs) == 0:
+            instructions = format(args[0], args[1], args[2])
+    
+    if len(args) == 5:
+        if 'fg' in kwargs and 'bg' in kwargs:
+            if 'concealed' in kwargs and kwargs['concealed']:
+                instructions = move_cursor(args[0], args[1]) + format(args[2], args[3], args[4], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
+            else:
+                instructions = move_cursor(args[0], args[1]) + format(args[2], args[3], args[4], fg=kwargs['fg'], bg=kwargs['bg'])
+        
+        if len(kwargs) == 0:
+            instructions = move_cursor(args[0], args[1]) + format(args[2], args[3], args[4])
+    
+    return instructions
+
+# arguments for attributes:
+# any array of colors
+def attributes(*args):
+    instructions = ''
+    
+    for arg in args:
+        instructions = instructions + '\033[' + arg + 'm'
+    return instructions
+
+def adjust(msg, length, align):
+    if length < len(msg):
+        return msg[:length]
+    
+    remains = length
+    
+    ret = ''
+
+    count = 0
+    for c in msg:
+        if c > '\x81':
+            count = count + 1.0/2.0
+        else:
+            count = count + 1
+    count = int(count)
+    print 'count', count
+
+    if align == Align.Center:
+        ret = ' '*((remains - count) / 2)
+    elif align == Align.Right:        
+        ret = ' '*(remains - len(msg))
+        
+    ret = ret + msg + ' '*(remains - count - len(ret))
+    return ret
+
+# arguments for format:
+# msg
+# msg, length, align
+# or above with keyword arguments: fg, bg, concealed
+def format(*args, **kwargs):
+    if len(args) == 1:
+        if 'fg' in kwargs and 'bg' in kwargs:
+            if 'concealed' in kwargs and kwargs['concealed']:
+                return attributes(kwargs['fg'], kwargs['bg'], concealed) + reset
+            else:
+                return attributes(kwargs['fg'], kwargs['bg']) + args[0] + reset
+        
+        if len(kwargs) == 0:
+            return args[0]
+    
+    if len(args) == 3:
+        if 'fg' in kwargs and 'bg' in kwargs:
+            if 'concealed' in kwargs and kwargs['concealed']:
+                return attributes(kwargs['fg'], kwargs['bg']) + adjust('', args[1], args[2]) + reset
+            else:
+                return attributes(kwargs['fg'], kwargs['bg']) + adjust(args[0], args[1], args[2]) + reset
+        
+        if len(kwargs) == 0:
+            return adjust(args[0], args[1], args[2])
+
+
+
+
+"""
+class Tools:
     
     def __init__(self, sock):
         self.temp = []
@@ -132,17 +281,17 @@ class Term:
         self.protocol = sock
     
     def put_on_cursor(self, msg):
-        self.protocol.send(msg)
+        self.protocol.send(str(msg))
         self.cursor_coln = self.cursor_coln + len(msg)
     
     def put(self, row, coln, msg):
         self.move_cursor(row, coln)
-        self.protocol.send(msg)
-        self.cursor_coln = self.cursor_coln + len(msg)
+        self.put_on_cursor(msg)
     
     def format_put_on_cursor(self, msg, maxLen, light=None, fg=None, bg=None, align=Align.Left, highlight=False):
         if highlight:
             light = True
+            fg = Colors.Black
             bg = Colors.Yellow
             # maybe add an arrow on the right pointing to the right
         self.put_on_cursor(self.format(light, fg, bg, msg, maxLen, align))
@@ -150,6 +299,7 @@ class Term:
     def format_put(self, row, coln, msg, maxLen, light=None, fg=None, bg=None, align=Align.Left, highlight=False):
         if highlight:
             light = True
+            fg = Colors.Black
             bg = Colors.Yellow
             # maybe add an arrow on the right pointing to the right
         self.put(row, coln, self.format(light, fg, bg, msg, maxLen, align))
@@ -204,7 +354,8 @@ class Term:
                     if self.input[-1] >= '\xa1' and self.input[-1] <= '\xf9': # BIG5
                         self.input = self.input[:self.insert-1] + self.input[self.insert:]
                         self.move_left_input(1)
-                """
+                
+                # not used
                 if len(self.id) == 1:
                     if self.id[-1] > '\x1f' and self.id[-1] < '\x7f':
                         self.id = self.id[:-1]
@@ -218,7 +369,7 @@ class Term:
                         self.id = self.id[:-2]
                     elif self.id[-1] > '\x1f' and self.id[-1] < '\x7f':
                         self.id = self.id[:-1]
-                """
+                # end
                 
     
     def finish_for_input(self):
@@ -284,3 +435,4 @@ class Term:
     # assuming len(msg) and maxLen are both < width 
     def format(self, light, fg_color, bg_color, msg, maxLen, alignment=Align.Left):
         return self.escape_sequence(light, fg_color, bg_color) + self.adjust(alignment, msg, maxLen) + color_reset
+"""

@@ -10,4 +10,8 @@ pttbbs-py project
     *Integrate Cython
     *Distributed model
 
+-Nov 11, 2010
+    今天改了很多東西@@，基本上很多內部結構又改了很多，這次有了focus components
+    這意思可能可以用tab來切換focus，所以可以一次看到聊天室和BBS???
+
 如果有任何問題，請參閱wiki

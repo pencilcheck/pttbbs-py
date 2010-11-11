@@ -1,10 +1,10 @@
-(A)nnouncement 【 精華公佈欄 】
-(F)avorites    【 我的最愛區 】
-(B)oard        【 分組討論區 】
-(M)ailbox      【 私人信件區 】
-(T)alk         【 休閒聊天區 】
-(S)settings    【 個人設定區 】
-(X)yz          【 系統資訊區 】
-(E)ntertainment【 娛樂與休閒 】
-(L)ist         【 編特別名單 】
-(Q)uit            離開，再見…
+(A)nnouncement 【 精華公佈欄 】;notfinished
+(F)avorites    【 我的最愛區 】;notfinished
+(B)oard        【 分組討論區 】;discussionboard2
+(M)ailbox      【 私人信件區 】;notfinished
+(T)alk         【 休閒聊天區 】;notfinished
+(S)settings    【 個人設定區 】;notfinished
+(X)yz          【 系統資訊區 】;notfinished
+(E)ntertainment【 娛樂與休閒 】;notfinished
+(L)ist         【 編特別名單 】;notfinished
+(Q)uit            離開，再見…;quit

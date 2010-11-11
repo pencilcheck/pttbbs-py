@@ -15,15 +15,14 @@
 
 import argparse
 import sys
-import bbs
-import db
-import term
-import screenlet
+import os
 
 import gevent
 from gevent import socket
 
-#import mbbsd
+import handler
+import screen
+import db
 
 # Parse program arguments
 parser = argparse.ArgumentParser(description='ptt BBS server daemon.')
@@ -68,39 +67,54 @@ DO      =   chr(253)    # Indicates the request that the other party perform, or
 DONT    =   chr(254)    # Indicates the demand that the other party stop performing, or confirmation that you are no longer expecting the other party to perform, the indicated option.
 IAC     =   chr(255)    # Data Byte 255.  Introduces a telnet command.
 
-def filter(data):        
-    if chr(255) == data[0]:
-        print 'probably IAC'
-        data = ""
-    elif chr(255) in data:
-        data.replace('\xff', '')
-    
-    return data
+# connections
+connections = []
+
+# set up db when first start up
+if not db.instance.exist:
+    db.instance.create()
+    db.instance.commit()
+    for i, line in enumerate(open('../../res/topmenu2')):
+        #print unicode(line.strip().decode('BIG5')), unicode(line.split(';')[0].strip().decode('BIG5')), line.split(';')[1].strip()
+        para = (unicode(str(i)), 0, True, line.split(';')[1].strip(), unicode(line.split(';')[0].strip().decode('BIG5')),)
+        db.instance.cursor.execute('insert into BoardFileSystem (Path, Type, Visible, Function, Title) values (?, ?, ?, ?, ?)', para)
+        
+    for i, line in enumerate(open('../../res/boardlist')):
+        para = (unicode(str(2) + "-" + str(i)), 0, True, line.split(';')[1].strip(), unicode(line.split(';')[0].strip().decode('BIG5')),)
+        db.instance.cursor.execute('insert into BoardFileSystem (Path, Type, Visible, Function, Title) values (?, ?, ?, ?, ?)', para)
+
+db.instance.commit()
 
 def handle_socket(sock):
+    print sock, "connected"
+    
+    #routine = handler.ViewStack(sock.getpeername(), screen.Buffer(sock)) 
+    
     try:
         sock.send(IAC + DO + LINEMODE) # tell client to disable linemode
         sock.send(IAC + WILL + ECHO) # tell client to not echo
         sock.sendall("Connecting...")
-        
-        conn = bbs.BBS(sock.getpeername())
-        
+    
         # push the login screenlet
-        conn.push(screenlet.login, term.Term(sock))
+        routine = handler.Routine()
+        routine.initialize() # setup resolution, character encoding etc...
+        routine.update()
+        sock.sendall(screen.clr)
+        sock.sendall(routine.draw())
         
         sock.recv(4096)
-
         
         while True:
             data = sock.recv(3) # 4096 bytes buffer
             if not data:
                 break
-            
-            conn.dataReceived(data)
-            print "sending from client", sock, repr(data)
-            #sock.sendall(data) # this is a simple echo sock :)
+            print sock, repr(data.strip('\xff').strip('\x00'))
+            if routine.update(data.strip('\xff').strip('\x00')) == 1: # need to clear screen
+                sock.sendall(screen.clr)
+            sock.sendall(routine.draw())
     except:
         pass
+        
     sock.close()
  
 print "setting up socket"
@@ -114,6 +128,6 @@ while True:
         new_sock, address = server.accept()
     except KeyboardInterrupt:
         break
-
+    
     # handle every new connection with a new coroutine
-    gevent.spawn(handle_socket, new_sock)
+    connections.append(gevent.spawn(handle_socket, new_sock))

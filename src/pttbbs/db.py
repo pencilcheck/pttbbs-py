@@ -32,9 +32,6 @@ class DB:
         
         self.conn = sqlite3.connect(DB_PATH)
         self.cursor = self.conn.cursor()
-        if not self.exist:
-            self.create()
-            self.commit()
     
     def create(self):
     
@@ -67,11 +64,14 @@ class DB:
                          FId TEXT,
                          Status TEXT NOT NULL
                         )"""
+        # type = 0 is board 1 is thread
         boardfs =     """CREATE TABLE BoardFileSystem
                         (
-                         Path TEXT,
-                         Type INTEGER,
-                         Title TEXT,
+                         Path TEXT UNIQUE,
+                         Type INTEGER NOT NULL,
+                         Visible INTEGER NOT NULL,
+                         Function TEXT,
+                         Title TEXT NOT NULL,
                          CreationDate NUMERIC,
                          LastModificationDate NUMERIC,
                          ModificationDates TEXT,
@@ -93,6 +93,7 @@ class DB:
         
         self.cursor.execute(users)
         self.cursor.execute(relations)
+        self.cursor.execute(boardfs)
         self.cursor.execute(guest)
     
     def commit(self):
