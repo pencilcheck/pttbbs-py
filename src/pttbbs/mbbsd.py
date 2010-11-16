@@ -1,3 +1,5 @@
+# -*- encoding: UTF-8 -*-
+
 ## Ptt BBS python rewrite
 ##
 ## Author: Penn Su <pennsu@gmail.com>
@@ -16,9 +18,15 @@
 import argparse
 import sys
 import os
+import itertools
 
 import gevent
+from gevent import monkey; monkey.patch_socket()
 from gevent import socket
+
+from twisted.internet.protocol import Protocol, Factory
+from twisted.internet import reactor
+
 
 import handler
 import screen
@@ -68,7 +76,7 @@ DONT    =   chr(254)    # Indicates the demand that the other party stop perform
 IAC     =   chr(255)    # Data Byte 255.  Introduces a telnet command.
 
 # connections
-connections = []
+connections = {}
 
 # set up db when first start up
 if not db.instance.exist:
@@ -85,49 +93,96 @@ if not db.instance.exist:
 
 db.instance.commit()
 
-def handle_socket(sock):
+def sanitize(data):
+    data = ''.join([k for k, g in itertools.groupby(data)])
+    if data[0] == IAC:
+        data = IAC + IAC + IAC
+    '''
+    it = iter(data)
+    while True:
+        try:
+            value = it.next()
+        except StopIteration:
+            break
+    '''
+    return data
+
+
+'''
+class handleProtocol(Protocol):
+
+    def connectionMade(self):
+        self.transport.write(IAC + DO + LINEMODE) # tell client to disable linemode
+        self.transport.write(IAC + WILL + ECHO) # tell client to not echo
+        self.transport.write(screen.clr) 
+        
+        self.routine = handler.Routine()
+        self.routine.initialize() # setup resolution, character encoding etc...
+        self.transport.write(self.routine.update())
+    
+    def dataReceived(self, data):
+        data = sanitize(data) # 4096 bytes buffer
+
+        print "recv", repr(data)
+        self.transport.write(self.routine.update(data))
+    
+    def connectionLost(self):
+        print "bye"
+
+# Next lines are magic:
+factory = Factory()
+factory.protocol = handleProtocol
+
+reactor.listenTCP(9090, factory)
+reactor.run()
+'''
+
+
+
+
+def handle_socket(sock, address):
+    global connections
     print sock, "connected"
-    
-    #routine = handler.ViewStack(sock.getpeername(), screen.Buffer(sock)) 
-    
-    try:
-        sock.send(IAC + DO + LINEMODE) # tell client to disable linemode
-        sock.send(IAC + WILL + ECHO) # tell client to not echo
-        sock.sendall("Connecting...")
-    
-        # push the login screenlet
-        routine = handler.Routine()
-        routine.initialize() # setup resolution, character encoding etc...
-        routine.update()
-        sock.sendall(screen.clr)
+    connections[sock] = address
+
+
+    sock.sendall(IAC + DO + LINEMODE) # tell client to disable linemode
+    sock.sendall(IAC + WILL + ECHO) # tell client to not echo
+    sock.sendall(screen.clr)
+
+    # push the login screenlet
+    routine = handler.Routine()
+    routine.initialize() # setup resolution, character encoding etc...
+    routine.update()
+    sock.sendall(routine.draw(True)) # force flag forces everything to update and draw
+
+    while routine.stillAlive:
+        data = ''
+        data += sanitize(sock.recv(4096)) # 4096 bytes buffer
+        if data == IAC + IAC + IAC:
+            continue
+        if not data:
+            break
+
+        print "recv", repr(data), "from", sock
+        if routine.update(data):
+            sock.sendall(screen.clr)
         sock.sendall(routine.draw())
-        
-        sock.recv(4096)
-        
-        while True:
-            data = sock.recv(3) # 4096 bytes buffer
-            if not data:
-                break
-            print sock, repr(data.strip('\xff').strip('\x00'))
-            if routine.update(data.strip('\xff').strip('\x00')) == 1: # need to clear screen
-                sock.sendall(screen.clr)
-            sock.sendall(routine.draw())
-    except:
-        pass
-        
+
+    del connections[sock]
     sock.close()
- 
+
 print "setting up socket"
-server = socket.socket()
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
-server.bind(('', 9090))
-server.listen(500)
-print "listening for 500 backlog"
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind((args.base, args.port))
+server.listen(5)
+print "listening for 5 backlogs"
 while True:
     try:
-        new_sock, address = server.accept()
+        sock, address = server.accept()
     except KeyboardInterrupt:
         break
-    
+
     # handle every new connection with a new coroutine
-    connections.append(gevent.spawn(handle_socket, new_sock))
+    gevent.spawn(handle_socket, sock, address)

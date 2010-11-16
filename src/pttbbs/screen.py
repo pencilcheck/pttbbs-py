@@ -1,3 +1,5 @@
+# -*- encoding: UTF-8 -*-
+
 ## Ptt BBS python rewrite
 ##
 ## This is the view of MVC architecture but shouldn't be used directly
@@ -85,8 +87,53 @@ BackgroundColors = enum(Black     =   '0;40', DarkGray    =   '1;40',
 Align = enum(Left='left', Center='center', Right='right')
 
 
+commands = {
+'NULL':chr(0),      # No operation.
+'BEL':chr(7),       # Produces an audible or visible signal (which does NOT move the print head).
+'BS':chr(8),        # Moves the print head one character position towards the left margin.
+'HT':chr(9),        # Moves the printer to the next horizontal tab stop.
+                    # It remains unspecified how either party determines or
+                    # establishes where such tab stops are located.
+'LF':chr(10),       # Moves the printer to the next print line,
+                    # keeping the same horizontal position.
+'VT':chr(11),       # Moves the printer to the next vertical tab stop.
+                    # It remains unspecified how either party determines or
+                    # establishes where such tab stops are located.
+'FF':chr(12),       # Moves the printer to the top of the next page,
+                    # keeping the same horizontal position.
+'CR':chr(13),       # Moves the printer to the left margin of the current line.
+'ECHO':chr(1),      # User-to-Server:  Asks the server to send Echos of the transmitted data.
+'SGA':chr(3),       # Suppress Go Ahead.
+                    # Go Ahead is silly and most modern servers should suppress it.
+'NAWS':chr(31),     # Negotiate About Window Size.
+                    # Indicate that information about the size of the terminal can be communicated.
+'LINEMODE':chr(34), # Allow line buffering to be negotiated about.
+'SE':chr(240),      # End of subnegotiation parameters.
+'NOP':chr(241),     # No operation.
+'DM':chr(242),      # "Data Mark": The data stream portion of a Synch.
+                    # This should always be accompanied by a TCP Urgent notification.
+'BRK':chr(243),     # NVT character Break.
+'IP':chr(244),      # The function Interrupt Process.
+'AO':chr(245),      # The function Abort Output
+'AYT':chr(246),     # The function Are You There.
+'EC':chr(247),      # The function Erase Character.
+'EL':chr(248),      # The function Erase Line
+'GA':chr(249),      # The Go Ahead signal.
+'SB':chr(250),      # Indicates that what follows is subnegotiation of the indicated option.
+'WILL':chr(251),    # Indicates the desire to begin performing,
+                    # or confirmation that you are now performing, the indicated option.
+'WONT':chr(252),    # Indicates the refusal to perform, or continue performing,
+                    # the indicated option.
+'DO':chr(253),      # Indicates the request that the other party perform,
+                    # or confirmation that you are expecting the other party to perform,
+                    # the indicated option.
+'DONT':chr(254),    # Indicates the demand that the other party stop performing,
+                    # or confirmation that you are no longer expecting the other party to perform,
+                    # the indicated option.
+'IAC':chr(255)      # Data Byte 255.  Introduces a telnet command.
+}
 
-
+'''
 commands = {
     chr(0):'NULL',      # No operation.
     chr(7):'BEL',       # Produces an audible or visible signal (which does NOT move the print head).
@@ -119,6 +166,7 @@ commands = {
     chr(254):'DONT',    # Indicates the demand that the other party stop performing, or confirmation that you are no longer expecting the other party to perform, the indicated option.
     chr(255):'IAC'      # Data Byte 255.  Introduces a telnet command.
 }
+'''
 
 clr = '\033[2J' # clear the screen
 eratocol = '\033[K' # erase to the end of line
@@ -152,27 +200,31 @@ def move_cursor_left(N):
 # row, coln, msg
 # or above two with keyword arguments: fg, bg, concealed
 def puts(*args, **kwargs):
+    print "puts", args, kwargs
     instructions = ""
     if len(args) == 1:
         if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs and kwargs['concealed']:
+            if 'concealed' in kwargs:
                 instructions = format(args[0], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
             else:
                 instructions = format(args[0], fg=kwargs['fg'], bg=kwargs['bg'])
-        
-        if len(kwargs) == 0:
-            instructions = args[0]
+        else:
+            if 'concealed' in kwargs:
+                instructions = format(args[0], concealed=kwargs['concealed'])
+            else:
+                instructions = args[0]
 
     if len(args) == 3:
         if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs and kwargs['concealed']:
+            if 'concealed' in kwargs:
                 instructions = move_cursor(args[0], args[1]) + format(args[2], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
             else:
                 instructions = move_cursor(args[0], args[1]) + format(args[2], fg=kwargs['fg'], bg=kwargs['bg'])
-        
-        if len(kwargs) == 0:
-            instructions = move_cursor(args[0], args[1]) + args[2]
-            
+        else:
+            if 'concealed' in kwargs:
+                instructions = move_cursor(args[0], args[1]) + format(args[2], concealed=kwargs['concealed'])
+            else:
+                instructions = move_cursor(args[0], args[1]) + args[2]
     return instructions
 
 # arguments for format_puts:
@@ -203,39 +255,35 @@ def format_puts(*args, **kwargs):
     
     return instructions
 
+def fillBlank(dimension):
+    instructions = move_cursor(dimension.line, dimension.coln)
+    for i in xrange(dimension.height):
+        instructions += " "*dimension.width + move_cursor_down(1) + move_cursor_left(dimension.width)
+    return instructions
+
 # arguments for attributes:
 # any array of colors
 def attributes(*args):
-    instructions = ''
-    
-    for arg in args:
-        instructions = instructions + '\033[' + arg + 'm'
-    return instructions
+    return ''.join(['\033[' + x + 'm' for x in args])
 
 def adjust(msg, length, align):
-    if length < len(msg):
+    realen = len(msg.encode('big5'))
+    if length < realen:
         return msg[:length]
     
-    remains = length
-    
-    ret = ''
+    remains = length - realen
 
-    count = 0
-    for c in msg:
-        if c > '\x81':
-            count = count + 1.0/2.0
-        else:
-            count = count + 1
-    count = int(count)
-    print 'count', count
-
+    if align == Align.Left or align == None:
+        left = ''
+        right = ' '*remains
     if align == Align.Center:
-        ret = ' '*((remains - count) / 2)
-    elif align == Align.Right:        
-        ret = ' '*(remains - len(msg))
-        
-    ret = ret + msg + ' '*(remains - count - len(ret))
-    return ret
+        left = ' '*(remains / 2)
+        right = left
+    elif align == Align.Right:
+        left = ' '*remains
+        right = ''
+
+    return left + msg + right
 
 # arguments for format:
 # msg
@@ -248,17 +296,17 @@ def format(*args, **kwargs):
                 return attributes(kwargs['fg'], kwargs['bg'], concealed) + reset
             else:
                 return attributes(kwargs['fg'], kwargs['bg']) + args[0] + reset
-        
+
         if len(kwargs) == 0:
             return args[0]
-    
+
     if len(args) == 3:
         if 'fg' in kwargs and 'bg' in kwargs:
             if 'concealed' in kwargs and kwargs['concealed']:
                 return attributes(kwargs['fg'], kwargs['bg']) + adjust('', args[1], args[2]) + reset
             else:
                 return attributes(kwargs['fg'], kwargs['bg']) + adjust(args[0], args[1], args[2]) + reset
-        
+
         if len(kwargs) == 0:
             return adjust(args[0], args[1], args[2])
 

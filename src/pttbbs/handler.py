@@ -1,3 +1,5 @@
+# -*- encoding: UTF-8 -*-
+
 ## Ptt BBS python rewrite
 ##
 ## This is the controller of MVC architecture
@@ -19,56 +21,64 @@ import pickle
 from time import strftime, localtime
 
 import db
+import screen
 import screenlets
+from utility import Dimension
+
 
 class Routine:
-    
     def __init__(self):
+        self.id = ""
+
+        self.stillAlive = True
         self.stack = ViewStack()
-        self.encoding = 'utf8'
+        self.encoding = u'big5'
         self.width = 80
         self.height = 24
-        
+        self.focusLine = 0
+        self.focusColn = 0
+
     def initialize(self):
         print "Routine initializing"
-        #encoding = screenlets.encoding(self, 0, 0)
-        
-        self.stack.push(screenlets.login(self, 0, 0, self.width, self.height))
-        self.stack.push(screenlets.encoding(self, self.height / 2 - 3, 0, self.width, self.height))
-        #self.stack.push(screenlets.resolution(self, self.height / 2 - 3, 0, self.width, self.height))
-    
-    # if update return 1 needs to clear screen
+        self.stack.push(screenlets.login(self, Dimension(0, 0, self.width, self.height)))
+
+        #self.stack.push(screenlets.encoding(self, Dimension(self.height / 2 - 3, 0, self.width, self.height)))
+        #dimension = Dimension(line=self.height / 2 - 3, coln=0, width=self.width, height=self.height)
+        #self.stack.push(screenlets.resolution(self, dimension))
+
+    # update screenlets and return 1 if needed clear screen (e.g. screenlet switching)
     def update(self, data=''):
-        print "Routine updating"
-        # update self.buffer and return it
         return self.stack.peek().update(data)
-            
-    def draw(self):
-        print "Routine drawing"
-        return self.stack.peek().draw().encode(self.encoding)
-    
+
+    # force will redraw all
+    def draw(self, force=False):
+        return self.stack.peek().draw(force).encode(self.encoding) + screen.move_cursor(self.focusLine, self.focusColn)
+
     def setWidth(self, width):
         self.width = width
-    
+
     def setHeight(self, height):
         self.height = height
-    
+
+    def disconnect(self):
+        # record before leaving
+        self.stillAlive = False
+
     def getOnlineCount(self):
         return 0
-    
+
     def getTime(self):
         #print strftime("%m/%d %a %Y %H:%M", localtime())
         return strftime("%m/%d %a %Y %H:%M", localtime())
-    
-    def user_lookup(self, userid, password):
-        print 'looking up account for this guy', self.me
-        
+
+    def userLookup(self, userid, password):
+        print 'looking up account for this guy', userid
+
         self.id = userid
-        
-        if userid == "guest":
-            db.instance.cursor.execute('select * from Users where UId=?', (userid,))
+
+        if self.id == "guest":
+            db.instance.cursor.execute('select * from Users where UId=?', (self.id,))
             for row in db.instance.cursor:
-                print repr(row[2])
                 if row[2] == None:
                     tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0])]
                     dict = (pickle.dumps(tmp),userid,)
@@ -85,7 +95,6 @@ class Routine:
             t = (userid,password,)
             db.instance.cursor.execute('select * from Users where UId=? and PW=?', t)
             for row in db.instance.cursor:
-                print repr(row[2])
                 if row[2] == None:
                     tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0])]
                     dict = (pickle.dumps(tmp),userid,)
@@ -182,7 +191,8 @@ class ViewStack:
         self.view_stack.append(screen)
     
     def pop(self):
-        if len(self.view_stack) > 0:
+        try:
+            print "popping", self.view_stack[-1]
             return self.view_stack.pop()
-            #self.view_cache[self.view_stack[len(self.view_stack)-1].__class__.__name__] = self.view_stack.pop()
-        return None
+        except:
+            return None
