@@ -223,14 +223,17 @@ class selectionMenu(control):
         super(selectionMenu, self).__init__(handler, dimension, **kwargs)
         self.align = align
         self.list = l
+        self.change = [1]*len(self.list)
         self.cursor = 0
         self.offset = 0
 
     def getIndex(self):
         return self.cursor + self.offset
 
-    #TODO: need to minimize refreshing buffer
     def update(self, data=''):
+        print "selectionMenu update"
+        ind = self.getIndex()
+        self.change[self.getIndex()] = 1
         # self.cursor can only go from 0 to self.height
         if isKey(data, arrow_up_key):
             if self.cursor == 0:
@@ -246,17 +249,27 @@ class selectionMenu(control):
                 if self.offset + self.cursor < len(self.list)-1:
                     self.cursor += 1
 
-    def draw(self, force=False):
-        ind = 0
-        for i, line in enumerate(self.list):
-            if i >= self.offset and ind < self.dimension.height:
-                #print i, self.offset, ind, self.dimension.height
+        if self.getIndex() == ind:
+            self.change[self.getIndex()] = 0
+        else:
+            self.change[self.getIndex()] = 1
 
-                if self.cursor == ind:
-                    self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align, fg=ForegroundColors.White, bg=BackgroundColors.Yellow)
-                else:
-                    self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align)
-                ind = ind + 1
+    def draw(self, force=False):
+        print "selectionMenu draw"
+        ind = 0
+        self.buffer = ""
+        if any(self.change[self.offset:self.offset+self.dimension.height]):
+            for i, line in enumerate(self.list):
+                if i >= self.offset and ind < self.dimension.height:
+                    #print i, self.offset, ind, self.dimension.height
+                    if self.change[i]:
+                        if self.cursor == ind:
+                            self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align, fg=ForegroundColors.White, bg=BackgroundColors.Yellow)
+                        else:
+                            self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align)
+                        self.change[i] = 0
+                    ind = ind + 1
+
         return self.buffer
 
 # arguments:
@@ -270,6 +283,7 @@ class scrollableControl(control):
         self.align = align
         self.list = l
         self.offset = 0
+        self.change = [1]*len(self.list)
 
     def getIndex(self):
         return self.offset
@@ -280,15 +294,19 @@ class scrollableControl(control):
         if isKey(data, arrow_up_key):
             if self.offset > 0:
                 self.offset -= 1
+                self.change = self.change[:self.offset] + [1]*self.dimension.height + self.change[self.offset+self.dimension.height+1:]
         elif isKey(data, arrow_down_key):
             if self.offset + self.dimension.height < len(self.list)-1:
                 self.offset += 1
+                self.change = self.change[:self.offset] + [1]*self.dimension.height + self.change[self.offset+self.dimension.height+1:]
 
     def draw(self, force=False):
         ind = 0
         for i, line in enumerate(self.list):
             if i >= self.offset and ind < self.dimension.height:
-                self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align)
+                if self.change[i]:
+                    self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align)
+                    self.change[i] = 0
                 ind = ind + 1
         return self.buffer
 
@@ -426,7 +444,7 @@ class footer(screenlet):
             super(footer, self).__init__(handler, dimension)
 
         if anykey:
-            self.label = label(self.handler, Dimension(self.dimension.height, 0, self.dimension.width, 1), u"按隨意鍵跳出", self.dimension.width, Align.Center, fg=ForegroundColors.Cyan, bg=BackgroundColors.Blue)
+            self.label = label(self.handler, self.dimension, u"按隨意鍵跳出", self.dimension.width, Align.Center, fg=ForegroundColors.Cyan, bg=BackgroundColors.Blue)
             self.subcomponents.add(self.label)
         else:
             self.title = ''

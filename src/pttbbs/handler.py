@@ -62,6 +62,7 @@ class Routine:
 
     def disconnect(self):
         # record before leaving
+
         self.stillAlive = False
 
     def getOnlineCount(self):

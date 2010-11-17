@@ -94,17 +94,10 @@ if not db.instance.exist:
 db.instance.commit()
 
 def sanitize(data):
-    data = ''.join([k for k, g in itertools.groupby(data)])
     if data[0] == IAC:
         data = IAC + IAC + IAC
-    '''
-    it = iter(data)
-    while True:
-        try:
-            value = it.next()
-        except StopIteration:
-            break
-    '''
+    else:
+        data = ''.join([k for k, g in itertools.groupby(data)]) # uniquefy the data
     return data
 
 
@@ -176,7 +169,7 @@ print "setting up socket"
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind((args.base, args.port))
-server.listen(5)
+server.listen(500)
 print "listening for 5 backlogs"
 while True:
     try:
