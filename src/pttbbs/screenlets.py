@@ -122,7 +122,6 @@ class Nodes:
                 if node.component.visible or isinstance(node.component, screenlet):
                     print "force drawing", node.component
                     self.buffer += node.component.draw(True)
-                    print repr(self.buffer)
                     continue
             else:
                 if node.component.visible and node.component.redrawn \
@@ -150,13 +149,20 @@ class screenlet(object):
 
     def setFocus(self, component):
         self.subcomponents.setFocusNode(component)
+        self.handler.focusLine = self.subcomponents.focusNode.component.focusLine
+        self.handler.focusColn = self.subcomponents.focusNode.component.focusColn
 
     def redrawn(self): # this will turn all redrawn flags of subcomponents to true
         for node in self.subcomponents.chain():
-            node.component.redrawn = True
+            if isinstance(node.component, control):
+                node.component.requestRedrawn()
+            else:
+                node.component.redrawn()
 
     def passFocus(self):
         self.subcomponents.passFocus()
+        self.handler.focusLine = self.subcomponents.focusNode.component.focusLine
+        self.handler.focusColn = self.subcomponents.focusNode.component.focusColn
 
     def update(self, data=''):
         ret = 0
@@ -205,6 +211,10 @@ class control(object):
         self.visible = value
         print self, "called visibility set", self.visible, self.redrawn
 
+    # all control should implement this for behavior when redrawning
+    def requestRedrawn(self):
+        pass
+
     def update(self, data=''):
         pass # set redrawn flag if needed
 
@@ -226,9 +236,14 @@ class selectionMenu(control):
         self.change = [1]*len(self.list)
         self.cursor = 0
         self.offset = 0
+        self.handler.resetFocus()
 
     def getIndex(self):
         return self.cursor + self.offset
+
+    def requestRedrawn(self):
+        for i in xrange(len(self.change)):
+            self.change[i] = 1
 
     def update(self, data=''):
         print "selectionMenu update"
@@ -280,7 +295,6 @@ class selectionMenu(control):
 class scrollableControl(control):
     def __init__(self, handler, dimension, l, **kwargs):
         super(scrollableControl, self).__init__(handler, dimension, **kwargs)
-        self.align = align
         self.list = l
         self.offset = 0
         self.change = [1]*len(self.list)
@@ -288,7 +302,7 @@ class scrollableControl(control):
     def getIndex(self):
         return self.offset
 
-    #TODO: need to minimize refreshing buffer
+    #TODO: need to minimize refreshing buffer, now need to test
     def update(self, data=''):
         # self.cursor can only go from 0 to self.height
         if isKey(data, arrow_up_key):
@@ -305,7 +319,7 @@ class scrollableControl(control):
         for i, line in enumerate(self.list):
             if i >= self.offset and ind < self.dimension.height:
                 if self.change[i]:
-                    self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align)
+                    self.buffer = self.buffer + screen.puts(self.dimension.line + ind, self.dimension.coln, line.strip())
                     self.change[i] = 0
                 ind = ind + 1
         return self.buffer
@@ -424,13 +438,13 @@ class header(screenlet):
         self.title = title
         
         # just for testing
-        self.location = "【 主功能表 】"
-        self.title = "批踢踢py實業坊"
+        #self.location = u"【 主功能表 】"
+        #self.title = u"批踢踢py實業坊"
         # end
         
         #self.subcomponents.append(label(self.handler, 0, 0, self.title, self.handler.width, Align.Center, fg=ForegroundColors.Black, bg=BackgroundColors.White))
-        self.subcomponents.add(label(self.handler, self.line, self.coln, self.width, self.height, self.title, self.handler.width, Align.Center, fg=ForegroundColors.White, bg=BackgroundColors.LightBlue))
-        self.subcomponents.add(label(self.handler, self.line, self.coln, self.width, self.height, self.location, fg=ForegroundColors.Yellow, bg=BackgroundColors.LightBlue))
+        self.subcomponents.add(label(self.handler, self.dimension, self.title, self.dimension.width, Align.Center, fg=ForegroundColors.White, bg=BackgroundColors.LightBlue))
+        self.subcomponents.add(label(self.handler, self.dimension, self.location, fg=ForegroundColors.Yellow, bg=BackgroundColors.LightBlue))
 
 # arguments:
 # *handler - the routine class
@@ -502,19 +516,29 @@ class login(screenlet):
 
         self.setFocus(self.idInput)
 
+    def registrationProcedures(self):
+        self.handler.stack.pop()
+        self.handler.stack.push(registration(self.handler, self.dimension))
+        self.handler.resetFocus()
+
+    def loginProcedures(self):
+        self.handler.id = self.id
+        self.handler.createSession()
+        self.handler.stack.pop()
+        self.handler.stack.push(welcome(self.handler, self.dimension))
+        self.handler.resetFocus()
 
     def handleData(self, data=''):
         if isKey(data, return_key):
             self.id = self.idInput.data
             self.pw = self.pwInput.data
-            if len(self.id) > 0 and len(self.pw) == 0:
+            if len(self.id) > 0 and self.idInput.visible:
                 if self.id == "new":
-                    self.handler.stack.pop()
-                    self.handler.stack.push(registration(self.handler, self.dimension))
+                    self.registrationProcedures()
                     return clr_scr
-                if self.id == "guest":
-                    self.handler.stack.pop()
-                    self.handler.stack.push(welcome(self.handler, self.dimension))
+
+                elif self.id == "guest":
+                    self.loginProcedures()
                     return clr_scr
 
                 self.idLabel.setVisibility(False)
@@ -523,11 +547,11 @@ class login(screenlet):
                 self.pwInput.setVisibility(True)
                 self.setFocus(self.pwInput)
                 self.warningLabel.setVisibility(False)
-            elif len(self.id) > 0 and len(self.pw) > 0:
-                # validate this id and pw
-                if self.handler.user_lookup(self.id, self.pw):
-                    self.handler.stack.pop()
-                    self.handler.stack.push(welcome(self.handler, self.dimension))
+
+            elif self.pwInput.visible:
+                # validate id and pw
+                if self.handler.userLookup(self.id, self.pw):
+                    self.loginProcedures()
                     return clr_scr
                 else:
                     self.pwInput.data = ""
@@ -553,33 +577,36 @@ class login(screenlet):
                 self.handler.buffer.put(22, 0, "請輸入密碼： ")
         
         self.handler.buffer.put(21, 0, "請輸入帳號，或以 guest 參觀，或以 new 註冊： ") # offset 45
-        
-        
-        
+
+
+
         if self.state == 0:
             self.handler.buffer.ready_for_input(13, 21, 45)
         elif self.state == 1:
             self.handler.buffer.ready_for_input(20, 22, 13, False)
-        
+
         if self.isKey(data, return_key): # return pressed
             if self.state == 0: # user id
                 self.id = self.handler.buffer.input
                 if self.id == "new":
                     self.handler.push(registration, selfdestruct=True)
+                    self.handler.resetFocus()
                     return
                 if self.id == "guest":
                     self.handler.user_lookup(self.id, self.pw) # just to associate guest with IP
                     self.handler.push(welcome, selfdestruct=True)
+                    self.handler.resetFocus()
                     return
                 self.handler.buffer.finish_for_input()
                 self.changeState(1)
-                
+
             else: # password
                 self.pw = self.handler.buffer.input
                 if self.handler.user_lookup(self.id, self.pw) == 0: # 0 success
                     #self.handler.buffer.print_input()
                     self.handler.buffer.finish_for_input()
                     self.handler.push(welcome, selfdestruct=True)
+                    self.handler.resetFocus()
                     return
                 else:
                     self.handler.buffer.finish_for_input()
@@ -604,7 +631,7 @@ class login(screenlet):
 
         self.handler.buffer.hide_cursor() # doesn't work QQ
         self.handler.buffer.print_input()
-        
+
         self.calls = self.calls + 1
 
 
@@ -627,6 +654,7 @@ class encoding(screenlet):
         if isKey(data, return_key):
             self.handler.stack.pop()
             self.handler.stack.push(login(self.handler, Dimension(0, 0, self.handler.width, self.handler.height)))
+            self.handler.resetFocus()
             return 1
 
         self.handler.encoding = self.options[self.list.offset + self.list.cursor]
@@ -656,6 +684,7 @@ class welcome(screenlet):
         if len(data) > 0:
             self.handler.stack.pop()
             self.handler.stack.push(topMenu(self.handler, self.dimension))
+            self.handler.resetFocus()
             return clr_scr
 
         return normal
@@ -670,14 +699,16 @@ class topMenu(screenlet):
                       u"(G)ames",
                       u"(S)ettings",
                       u"(Q)uit"]
-        self.selectionMenu = selectionMenu(self.handler, Dimension(4, 25, 40, self.dimension.height - 2), Align.Left, self.items)
+        self.selectionMenu = selectionMenu(self.handler, Dimension(4, 20, 45, self.dimension.height - 2), Align.Left, self.items)
         self.subcomponents.add(self.selectionMenu)
 
     def handleData(self, data=''):
         if isKey(data, arrow_left_key):
             self.handler.stack.pop()
+            self.handler.resetFocus()
             return clr_scr
         elif isKey(data, arrow_right_key) or isKey(data, return_key):
+            self.selectionMenu.requestRedrawn()
             if self.selectionMenu.getIndex() == 0: # Announcement
                 self.handler.stack.push(announce(self.handler, self.dimension))
             elif self.selectionMenu.getIndex() == 1: # Boards
@@ -693,9 +724,10 @@ class topMenu(screenlet):
 
                 # confirm
                 self.handler.stack.push(quit(self.handler, self.dimension))
+            self.handler.resetFocus()
             return clr_scr
 
-        return 0
+        return normal
 
 
 class quit(screenlet):
@@ -747,6 +779,7 @@ class discussionboards(screenlet):
             self.buff = []
             result = self.offset + self.cursor
             self.handler.push(None, pathappend=str(result))
+            self.handler.resetFocus()
             return
 
         self.commandinterface(data)
@@ -762,13 +795,13 @@ class announce(screenlet):
     def __init__(self, handler, dimension):
         super(announce, self).__init__(handler, dimension)
 
-        self.announcements = scrollableControl(self.handler, Dimension(), self.handler.loadAnnouncement())
-        self.header = header(self.handler, None, u'sdsd', u'dsfadf')
+        self.announcements = scrollableControl(self.handler, Dimension(4, 0, self.dimension.width, self.dimension.height-2), self.handler.loadAnnouncement())
+        self.header = header(self.handler, None, u"【 主功能表 】", u"批踢踢py實業坊")
         self.footer = footer(self.handler, None)
 
         self.add(self.announcements)
-        self.add(header)
-        self.add(footer)
+        self.add(self.header)
+        self.add(self.footer)
 
 class boardlist(screenlet):
     def __init__(self, handler, dimension, cwd):

@@ -80,8 +80,9 @@ connections = {}
 
 # set up db when first start up
 if not db.instance.exist:
-    db.instance.create()
+    db.instance.create() # initialize db and create guest user
     db.instance.commit()
+    """
     for i, line in enumerate(open('../../res/topmenu2')):
         #print unicode(line.strip().decode('BIG5')), unicode(line.split(';')[0].strip().decode('BIG5')), line.split(';')[1].strip()
         para = (unicode(str(i)), 0, True, line.split(';')[1].strip(), unicode(line.split(';')[0].strip().decode('BIG5')),)
@@ -92,6 +93,7 @@ if not db.instance.exist:
         db.instance.cursor.execute('insert into BoardFileSystem (Path, Type, Visible, Function, Title) values (?, ?, ?, ?, ?)', para)
 
 db.instance.commit()
+"""
 
 def sanitize(data):
     if data[0] == IAC:
@@ -137,6 +139,7 @@ def handle_socket(sock, address):
     global connections
     print sock, "connected"
     connections[sock] = address
+    print sock, address, "connected"
 
 
     sock.sendall(IAC + DO + LINEMODE) # tell client to disable linemode
@@ -144,7 +147,7 @@ def handle_socket(sock, address):
     sock.sendall(screen.clr)
 
     # push the login screenlet
-    routine = handler.Routine()
+    routine = handler.Routine(address)
     routine.initialize() # setup resolution, character encoding etc...
     routine.update()
     sock.sendall(routine.draw(True)) # force flag forces everything to update and draw
@@ -160,7 +163,9 @@ def handle_socket(sock, address):
         print "recv", repr(data), "from", sock
         if routine.update(data):
             sock.sendall(screen.clr)
-        sock.sendall(routine.draw())
+        scr = routine.draw()
+        print repr(scr)
+        sock.sendall(scr)
 
     del connections[sock]
     sock.close()

@@ -18,6 +18,7 @@
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import pickle
+import datetime
 from time import strftime, localtime
 
 import db
@@ -27,8 +28,10 @@ from utility import Dimension
 
 
 class Routine:
-    def __init__(self):
+    def __init__(self, address):
         self.id = ""
+        self.address = address
+        self.acl = 0
 
         self.stillAlive = True
         self.stack = ViewStack()
@@ -54,6 +57,10 @@ class Routine:
     def draw(self, force=False):
         return self.stack.peek().draw(force).encode(self.encoding) + screen.move_cursor(self.focusLine, self.focusColn)
 
+    def resetFocus(self):
+        self.focusLine = -1
+        self.focusColn = -1
+
     def setWidth(self, width):
         self.width = width
 
@@ -68,15 +75,29 @@ class Routine:
     def getOnlineCount(self):
         return 0
 
-    def getTime(self):
-        #print strftime("%m/%d %a %Y %H:%M", localtime())
-        return strftime("%m/%d %a %Y %H:%M", localtime())
+    def getTime(self, time=localtime()):
+        #print strftime("%m/%d %a %Y %H:%M", time)
+        return strftime("%m/%d %a %Y %H:%M", time)
 
+    def createSession(self):
+        print "creating session at", datetime.datetime.today() 
+        t = (self.id, self.address[0], self.address[1], datetime.datetime.today())
+        db.instance.cursor.execute('update Sessions set UId=?, IP=?, Port=?, LoginTime=?', t)
+        db.instance.commit()
+        """
+        tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0])]
+        dict = (pickle.dumps(tmp),userid,)
+        tmp = pickle.loads(str(row[2]))
+        tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0]))
+        dict = (pickle.dumps(tmp),userid,)
+        db.instance.cursor.execute('update Users set IPs=? where UId=?', dict)
+        db.instance.commit()
+        """
+
+    # return True means good, False means bad
     def userLookup(self, userid, password):
-        print 'looking up account for this guy', userid
-
-        self.id = userid
-
+        print 'looking up account for', userid, password
+        """
         if self.id == "guest":
             db.instance.cursor.execute('select * from Users where UId=?', (self.id,))
             for row in db.instance.cursor:
@@ -92,23 +113,28 @@ class Routine:
                 db.instance.commit()
                 return 0
         else:
-            # Do this instead
-            t = (userid,password,)
-            db.instance.cursor.execute('select * from Users where UId=? and PW=?', t)
-            for row in db.instance.cursor:
-                if row[2] == None:
-                    tmp = [(strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0])]
-                    dict = (pickle.dumps(tmp),userid,)
-                else:
-                    tmp = pickle.loads(str(row[2]))
-                    tmp.append((strftime("%a, %d %b %Y %H:%M:%S", localtime()),self.me[0]))
-                    dict = (pickle.dumps(tmp),userid,)
-                print dict
-                db.instance.cursor.execute('update Users set IPs=? where UId=?', dict)
-                db.instance.commit()
-                return 0
-        return -1
-    
+        """
+        db.instance.cursor.execute('select * from Users')
+        for row in db.instance.cursor:
+            print row
+
+        t = (userid,password,)
+        db.instance.cursor.execute('select * from Users where UId=? and PW=?', t)
+        for row in db.instance.cursor:
+            return True
+        return False
+
+    def loadAnnouncement(self):
+        print "load Announcement"
+
+        l = []
+
+        for line in open('announce.txt'):
+            print line
+            l.append(line)
+
+        return l
+
     def loadPathFunction(self):
         print "loadPathFunction"
         print "path", self.path
@@ -172,11 +198,11 @@ class ViewStack:
     def __init__(self):
         self.view_stack = []
         self.view_cache = []
-    
+
     def peek(self):
         print "peek", self.view_stack[-1]
         return self.view_stack[-1]
-    
+
     def push(self, screen):
         print "pushing", screen, "to the stack"
         """
@@ -184,13 +210,13 @@ class ViewStack:
             self.view_stack.append(self.view_cache[screenlet.__class__.__name__])
         else:
             self.view_stack.append(screenlet())
-        
-        
+
+
         if screen == None: # pushing predefined in the db
             screen = screenlets.evalString(self.loadPathFunction())
         """
         self.view_stack.append(screen)
-    
+
     def pop(self):
         try:
             print "popping", self.view_stack[-1]

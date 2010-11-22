@@ -181,6 +181,8 @@ reset = '\x1b[0m' # reset color
 #'\[\033[44m\]\[\033[1;31m\]'
 
 def move_cursor(row, coln):
+    if row == coln == -1:
+        return hide
     return '\033[' + str(row) + ';' + str(coln) + 'H'
 
 def move_cursor_up(N):
