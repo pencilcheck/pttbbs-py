@@ -202,7 +202,12 @@ def move_cursor_left(N):
 # row, coln, msg
 # or above two with keyword arguments: fg, bg, concealed
 def puts(*args, **kwargs):
-    print "puts", args, kwargs
+    '''
+    if len(args) == 1:
+        print "puts", args[0], args, kwargs
+    else:
+        print "puts", args[2], args, kwargs
+    '''
     instructions = ""
     if len(args) == 1:
         if 'fg' in kwargs and 'bg' in kwargs:
@@ -234,6 +239,12 @@ def puts(*args, **kwargs):
 # row, coln, msg, length, align
 # or above two with keyword arguments: fg, bg, concealed
 def format_puts(*args, **kwargs):
+    '''
+    if len(args) == 3:
+        print "format_puts", args[0], args, kwargs
+    else:
+        print "format_puts", args[2], args, kwargs
+    '''
     instructions = ""
     if len(args) == 3:
         if 'fg' in kwargs and 'bg' in kwargs:

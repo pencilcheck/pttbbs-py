@@ -96,6 +96,8 @@ db.instance.commit()
 """
 
 def sanitize(data):
+    if data == None:
+        return ''
     if data[0] == IAC:
         data = IAC + IAC + IAC
     else:
@@ -161,10 +163,12 @@ def handle_socket(sock, address):
             break
 
         print "recv", repr(data), "from", sock
-        if routine.update(data):
+        if routine.update(data.decode('big5')):
             sock.sendall(screen.clr)
-        scr = routine.draw()
-        print repr(scr)
+            scr = routine.draw(True)
+        else:
+            scr = routine.draw()
+        #print repr(scr)
         sock.sendall(scr)
 
     del connections[sock]

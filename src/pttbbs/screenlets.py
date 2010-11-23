@@ -22,6 +22,8 @@ from time import localtime
 import itertools
 import codecs
 import gevent
+from copy import copy
+from copy import deepcopy
 
 import screen
 from screen import ForegroundColors, BackgroundColors
@@ -37,6 +39,7 @@ arrow_down_key = ['\x1bOB', '\x1b[B']
 arrow_right_key = ['\x1bOC', '\x1b[C']
 arrow_left_key = ['\x1bOD', '\x1b[D']
 tab_key = ['\t']
+ctrl_x = ['\x18']
 shift_key = '' # it doesn't send
 
 clr_scr = 1
@@ -61,9 +64,11 @@ def isDoubleByte(data):
         return False
 
 class Node:
-    def __init__(self, component, parents=[], next=None):
-        self.parents = parents # a list of parents and the last one is the control
+    def __init__(self, control, minAuth=0, next=None):
         self.component = component
+        self.minAuth = minAuth
+        self.redrawn = False
+        self.visible = True
         self.next = next
 
 class Nodes:
@@ -71,21 +76,22 @@ class Nodes:
         self.focusChain = []
         self.focusNode = None
 
-    def add(self, component, parents=[]):
+    def add(self, component, parents=[], minAuth=0):
+        print "adding", component, "with parent", parents, "minAuth", minAuth
 
         if isinstance(component, control):
+            print "component buffer:", repr(component.buffer)
             if len(self.focusChain) > 0:
-                node = Node(component, parents, self.focusChain[0])
+                node = Node(component, parents, minAuth, self.focusChain[0])
                 self.focusChain[-1].next = node
                 self.focusChain.append(node)
             else:
-                node = Node(component, parents)
+                node = Node(component, parents, minAuth)
                 node.next = node
                 self.focusChain.append(node)
         else:
-            parents.append(component)
             for comp in component.subcomponents.chain():
-                self.add(comp.component, parents)
+                self.add(comp.component, parents=parents + [component], minAuth=minAuth)
 
 
     def chain(self):
@@ -107,29 +113,6 @@ class Nodes:
     def passFocus(self):
         self.focusNode = self.focusNode.next
 
-    def draw(self, force):
-        self.buffer = ""
-        for node in self.chain():
-            if isinstance(node.component, control):
-                if node.component.redrawn:
-                    if not node.component.visible:
-                        print "erasing", node.component
-                        self.buffer += screen.fillBlank(node.component.dimension)
-                        node.component.redrawn = False
-
-        for node in self.chain():
-            if force:
-                if node.component.visible or isinstance(node.component, screenlet):
-                    print "force drawing", node.component
-                    self.buffer += node.component.draw(True)
-                    continue
-            else:
-                if node.component.visible and node.component.redrawn \
-                        or node == self.getFocusNode():
-                    print "drawing focus or visible redrawn or screenlet", node.component
-                    self.buffer += node.component.draw(force)
-            node.component.redrawn = False
-        return self.buffer
 
 # arguments:
 # *handler - the routine class
@@ -138,114 +121,112 @@ class screenlet(object):
     def __init__(self, handler, dimension):
         self.handler = handler
         self.dimension = dimension
-        self.buffer = "" # if this is the terminal it should have the logic for it, else should be the aggregate of all components'
-        self.subcomponents = Nodes()
+        self.controls = []
+        self.focusIndex = None
 
     def handleData(self, data):
         return normal
 
-    def add(self, stuff):
-        self.subcomponents.add(stuff)
+    def add(self, control):
+        self.controls.append(control)
 
-    def setFocus(self, component):
-        self.subcomponents.setFocusNode(component)
-        self.handler.focusLine = self.subcomponents.focusNode.component.focusLine
-        self.handler.focusColn = self.subcomponents.focusNode.component.focusColn
+    def focusedControl(self):
+        return self.controls[self.focusIndex] if self.focusIndex else None
 
-    def redrawn(self): # this will turn all redrawn flags of subcomponents to true
-        for node in self.subcomponents.chain():
-            if isinstance(node.component, control):
-                node.component.requestRedrawn()
-            else:
-                node.component.redrawn()
+    def nextFocusedControl(self):
+        if self.focusIndex == len(self.controls)-1:
+            self.focusIndex == 0
+        else:
+            self.focusIndex += 1
 
-    def passFocus(self):
-        self.subcomponents.passFocus()
-        self.handler.focusLine = self.subcomponents.focusNode.component.focusLine
-        self.handler.focusColn = self.subcomponents.focusNode.component.focusColn
+    def setFocusedControl(self, control):
+        for i, item in enumerate(self.controls):
+            if item == control:
+                self.focusIndex = i
 
     def update(self, data=''):
-        ret = 0
-        for node in self.subcomponents.chain():
-            if isinstance(node.component, screenlet):
-                ret |= node.component.update(data) # clr scr?
-            elif node == self.subcomponents.getFocusNode():
-                node.component.update(data) # chance to set the redrawn flag
-                self.handler.focusLine = node.component.focusLine
-                self.handler.focusColn = node.component.focusColn
-            else:
-                node.component.update() # set redrawn flag
+        for i, item in enumerate(self.controls):
+            item.update(data if i == self.focusIndex else '')
 
-        ret |= self.handleData(data)
-        return ret
+        if not self.focusIndex:
+            for item in self.controls:
+                item.update(data)
 
+        return self.handleData(data)
 
+    """
     def draw(self, force=False): # force will redrawn all components
         return self.subcomponents.draw(force)
+    """
+    def draw(self, force=False):
+        self.buffer = ""
+        for item in self.controls:
+            if item.redrawn and not item.visible:
+                self.buffer += screen.fillBlank(item.dimension)
+                item.redrawn = False
+
+        for item in self.controls:
+            if (force or item.redrawn) and item.visible:
+                self.buffer += item.draw()
+                item.redrawn = False
+
+        focus = ''
+        if self.focusedControl():
+            focus = screen.move_cursor(self.focusedControl().focusLine, self.focusedControl().focusColn)
+        else:
+            focus = screen.move_cursor(self.handler.height+1, self.handler.width+1)
+        return self.buffer + focus
 
 # arguments:
 # *handler - the routine class
 # *dimension - a Dimension object
-# keywords: focusLine, focusColn, visible
+# keywords: focusLine, focusColn, visible, minACL
 class control(object):
     def __init__(self, handler, dimension, **kwargs):
         self.handler = handler
         self.dimension = dimension
         self.buffer = ""
-        self.redrawn = True # for first time
-        if 'visible' in kwargs:
-            self.visible = kwargs['visible']
-        else:
-            self.visible = True
-        if 'focusLine' in kwargs:
-            self.focusLine = kwargs['focusLine']
-        else:
-            self.focusLine = self.dimension.line
-        if 'focusColn' in kwargs:
-            self.focusColn = kwargs['focusColn']
-        else:
-            self.focusColn = self.dimension.coln
+        self.visible = kwargs['visible'] if 'visible' in kwargs else True
+        self.minACL = kwargs['minACL'] if 'minACL' in kwargs else 0
+        self.focusLine = kwargs['focusLine'] if 'focusLine' in kwargs else self.dimension.line
+        self.focusColn = kwargs['focusColn'] if 'focusColn' in kwargs else self.dimension.coln
+        self.redrawn = False
 
-    def setVisibility(self, value):
-        self.redrawn = True
-        self.visible = value
-        print self, "called visibility set", self.visible, self.redrawn
-
-    # all control should implement this for behavior when redrawning
-    def requestRedrawn(self):
-        pass
+    def setVisibility(self, flag):
+        if not flag == self.visible:
+            self.redrawn = True
+        self.visible = flag
 
     def update(self, data=''):
         pass # set redrawn flag if needed
 
 
-    def draw(self, force=False):
+    def draw(self):
         return self.buffer
 
 # arguments:
 # *handler - the routine class
 # *dimension - a Dimension object
-# keywords: focusLine, focusColn, visible
-# *align - Alignment
-# *l - content
+# *l - menu list
+# keywords: focusLine, focusColn, visible, minACL
 class selectionMenu(control):
-    def __init__(self, handler, dimension, align, l, **kwargs):
+    def __init__(self, handler, dimension, l, **kwargs):
         super(selectionMenu, self).__init__(handler, dimension, **kwargs)
-        self.align = align
-        self.list = l
-        self.change = [1]*len(self.list)
+        self.menulist = l
         self.cursor = 0
         self.offset = 0
-        self.handler.resetFocus()
+        self.change = [1]*len(self.menulist)
 
     def getIndex(self):
         return self.cursor + self.offset
 
-    def requestRedrawn(self):
+    def redraw(self):
         for i in xrange(len(self.change)):
             self.change[i] = 1
 
     def update(self, data=''):
+        if len(self.menulist) == 0: # don't need to update if the list is empty
+            return
         print "selectionMenu update"
         ind = self.getIndex()
         self.change[self.getIndex()] = 1
@@ -254,34 +235,38 @@ class selectionMenu(control):
             if self.cursor == 0:
                 if self.offset > 0:
                     self.offset -= 1
+                    self.redraw()
             else:
                 self.cursor -= 1
+            self.redrawn = True
         elif isKey(data, arrow_down_key):
             if self.cursor == self.dimension.height-1:
-                if self.offset + self.dimension.height < len(self.list)-1:
+                if self.offset + self.dimension.height < len(self.menulist)-1:
                     self.offset += 1
+                    self.redraw()
             else:
-                if self.offset + self.cursor < len(self.list)-1:
+                if self.offset + self.cursor < len(self.menulist)-1:
                     self.cursor += 1
+            self.redrawn = True
 
         if self.getIndex() == ind:
             self.change[self.getIndex()] = 0
         else:
             self.change[self.getIndex()] = 1
 
-    def draw(self, force=False):
-        print "selectionMenu draw"
+    def draw(self):
         ind = 0
         self.buffer = ""
         if any(self.change[self.offset:self.offset+self.dimension.height]):
-            for i, line in enumerate(self.list):
+            print "selectionMenu draw"
+            for i, line in enumerate(self.menulist):
                 if i >= self.offset and ind < self.dimension.height:
                     #print i, self.offset, ind, self.dimension.height
                     if self.change[i]:
                         if self.cursor == ind:
-                            self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align, fg=ForegroundColors.White, bg=BackgroundColors.Yellow)
+                            self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, Align.Left, fg=ForegroundColors.White, bg=BackgroundColors.Yellow)
                         else:
-                            self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, self.align)
+                            self.buffer = self.buffer + screen.format_puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, Align.Left)
                         self.change[i] = 0
                     ind = ind + 1
 
@@ -290,8 +275,8 @@ class selectionMenu(control):
 # arguments:
 # *handler - the routine class
 # *dimension - a Dimension object
-# *l - content
-# keywords: visible
+# *l - list content
+# keywords: focusLine, focusColn, visible, minACL
 class scrollableControl(control):
     def __init__(self, handler, dimension, l, **kwargs):
         super(scrollableControl, self).__init__(handler, dimension, **kwargs)
@@ -309,10 +294,12 @@ class scrollableControl(control):
             if self.offset > 0:
                 self.offset -= 1
                 self.change = self.change[:self.offset] + [1]*self.dimension.height + self.change[self.offset+self.dimension.height+1:]
+            self.redrawn = True
         elif isKey(data, arrow_down_key):
             if self.offset + self.dimension.height < len(self.list)-1:
                 self.offset += 1
                 self.change = self.change[:self.offset] + [1]*self.dimension.height + self.change[self.offset+self.dimension.height+1:]
+            self.redrawn = True
 
     def draw(self, force=False):
         ind = 0
@@ -327,8 +314,8 @@ class scrollableControl(control):
 # arguments:
 # *handler - the routine class
 # *dimension - a Dimension object
-# keywords: focusLine, focusColn, visible
 # *path - the path of the file
+# keywords: focusLine, focusColn, visible, minACL
 class art(control):
     def __init__(self, handler, dimension, path, **kwargs):
         super(art, self).__init__(handler, dimension, **kwargs)
@@ -343,7 +330,7 @@ class art(control):
 # *handler - the routine class
 # *dimension - a Dimension object
 # *msg, length, align
-# keywords: focusLine, focusColn, fg, bg, visible
+# keywords: focusLine, focusColn, fg, bg, visible, minACL
 class label(control):
     def __init__(self, handler, dimension, *args, **kwargs):
         super(label, self).__init__(handler, dimension, **kwargs)
@@ -360,39 +347,42 @@ class label(control):
 # *handler - the routine class
 # *dimension - a Dimension object
 # *length, concealed
-# keywords: focusLine, focusColn, visible
+# keywords: focusLine, focusColn, visible, minACL
 class input(control):
     def __init__(self, handler, dimension, *args, **kwargs):
         super(input, self).__init__(handler, dimension, **kwargs)
         self.length = args[0]
         self.concealed = False if len(args) < 2 else args[1]
-        self.insert = 0
+        self.internalCursor = 0
         self.data = ""
 
+    def insert(self):
+        return len(self.data[:self.internalCursor].encode('big5'))
+
     def moveRight(self, n):
-        if self.insert < min(self.length - n, len(self.data)):
-            self.insert = self.insert + n
-        
+        if self.internalCursor < min(self.length - n, len(self.data)):
+            self.internalCursor += n
+
     def moveLeft(self, n):
-        if self.insert >= n:
-            self.insert = self.insert - n
-                
+        if self.internalCursor >= n:
+            self.internalCursor = self.internalCursor - n
+
     def backSpace(self):
-        if self.insert > 0:
-                # check for double byte character
-                self.data = self.data[:self.insert-1] + self.data[self.insert:]
-                self.moveLeft(1)
-        if self.insert == 0 and len(self.data) == 0:
+        if self.internalCursor > 0:
+            self.data = self.data[:self.internalCursor-1] + self.data[self.internalCursor:]
+            self.moveLeft(1)
+        if self.internalCursor == 0 and len(self.data) == 0:
             self.data = screen.commands['BEL']
 
     def addInput(self, data):
         if len(self.data) < self.length-1: # minus 1 for the cursor
-            self.data = self.data[:self.insert] + data + self.data[self.insert:]
+            self.data = self.data[:self.internalCursor] + data + self.data[self.internalCursor:]
 
             # watch out for double byte
             self.moveRight(len(data))
 
     def update(self, data=''):
+        print "input update"
         if len(self.data) > 0 and self.data[-1] == screen.commands['BEL']:
             print repr(self.data), repr(screen.commands['BEL'])
             self.data = self.data[:-1]
@@ -406,78 +396,75 @@ class input(control):
             self.redrawn = True
             self.moveLeft(1)
         elif len(data) > 0:
-            if isDoubleByte(data) or isSingleByte(data):
+            #if isDoubleByte(data) or isSingleByte(data):
+            if data > '\x20':
                 self.redrawn = True
                 self.addInput(data)
+                print "adding input data"
 
         if not self.concealed:
-            self.focusColn = self.dimension.coln + self.insert
+            self.focusColn = self.dimension.coln + self.insert()
 
 
-    def draw(self, force=False):
-
+    def draw(self):
         if self.concealed:
             self.buffer = screen.format_puts(self.dimension.line, self.dimension.coln, self.data, self.length, Align.Left, fg=ForegroundColors.Black, bg=BackgroundColors.Black, concealed=self.concealed)
         else:
             self.buffer = screen.format_puts(self.dimension.line, self.dimension.coln, self.data, self.length, Align.Left, fg=ForegroundColors.Black, bg=BackgroundColors.White, concealed=self.concealed)
+        print "input data", repr(self.data)
+        print "input draw", repr(self.buffer)
         return self.buffer
 
 # arguments:
 # *handler - the routine class
-# *dimension - a Dimension object
 # *location - the location of the screen
 # *title - the middle text on the header
-class header(screenlet):
-    def __init__(self, handler, dimension, location, title):
-        if dimension == None:
-            super(header, self).__init__(handler, Dimension(0, 0, handler.width, 1))
-        else:
-            super(header, self).__init__(handler, dimension)
+# keywords: focusLine, focusColn, visible, minACL
+class header(control):
+    def __init__(self, handler, location, title, **kwargs):
+        super(header, self).__init__(handler, Dimension(0, 0, handler.width, 1), **kwargs)
 
-        self.location = location
-        self.title = title
-        
         # just for testing
         #self.location = u"【 主功能表 】"
         #self.title = u"批踢踢py實業坊"
-        # end
-        
-        #self.subcomponents.append(label(self.handler, 0, 0, self.title, self.handler.width, Align.Center, fg=ForegroundColors.Black, bg=BackgroundColors.White))
-        self.subcomponents.add(label(self.handler, self.dimension, self.title, self.dimension.width, Align.Center, fg=ForegroundColors.White, bg=BackgroundColors.LightBlue))
-        self.subcomponents.add(label(self.handler, self.dimension, self.location, fg=ForegroundColors.Yellow, bg=BackgroundColors.LightBlue))
+
+        self.buffer = label(self.handler, self.dimension, title, self.dimension.width, Align.Center, fg=ForegroundColors.White, bg=BackgroundColors.LightBlue).buffer + label(self.handler, self.dimension, location, fg=ForegroundColors.Yellow, bg=BackgroundColors.LightBlue).buffer
 
 # arguments:
 # *handler - the routine class
-# *dimension - a Dimension object
-# anykey - if this will be anykey footer
-class footer(screenlet):
-    def __init__(self, handler, dimension, anykey=False):
-        if dimension == None:
-            super(footer, self).__init__(handler, Dimension(handler.height, 0, handler.width, 1))
-        else:
-            super(footer, self).__init__(handler, dimension)
+# keywords: focusLine, focusColn, visible, minACL
+class anykey(control):
+    def __init__(self, handler, **kwargs):
+        super(anykey, self).__init__(handler, Dimension(handler.height, 0, handler.width, 1), **kwargs)
 
-        if anykey:
-            self.label = label(self.handler, self.dimension, u"按隨意鍵跳出", self.dimension.width, Align.Center, fg=ForegroundColors.Cyan, bg=BackgroundColors.Blue)
-            self.subcomponents.add(self.label)
-        else:
-            self.title = ''
-            self.time = ''
-            self.number = ''
-            '''
-            time = self.handler.getTime()
-            constellation = "星座"
-            online = "線上" + str(self.handler.getOnlineCount()) + "人"
-            id = "我是" + self.handler.id
-            self.handler.buffer.format_put(screen.height, 0, time, len(time),
-                                     True, Colors.Cyan, Colors.Blue, Align.Center)
-            self.handler.buffer.format_put_on_cursor(constellation, len(constellation),
-                                     True, Colors.White, Colors.Magenta, Align.Center)
-            self.handler.buffer.format_put_on_cursor(online, len(online) + 10,
-                                     True, Colors.Cyan, Colors.Blue)
-            self.handler.buffer.format_put_on_cursor(id, len(id) + 20,
-                                     True, Colors.Cyan, Colors.Blue)
-            '''
+        self.buffer = label(self.handler, self.dimension, u"按隨意鍵跳出", self.dimension.width, Align.Center, fg=ForegroundColors.Cyan, bg=BackgroundColors.Blue).buffer
+
+# arguments:
+# *handler - the routine class
+# keywords: focusLine, focusColn, visible, minACL
+class footer(control):
+    def __init__(self, handler, **kwargs):
+        super(footer, self).__init__(handler, Dimension(handler.height, 0, handler.width, 1), **kwargs)
+
+        self.buffer = label(self.handler, self.dimension, u"批踢踢py實業坊", self.dimension.width, Align.Center, fg=ForegroundColors.White, bg=BackgroundColors.LightBlue).buffer + label(self.handler, self.dimension, u"【 主功能表 】", fg=ForegroundColors.Yellow, bg=BackgroundColors.LightBlue).buffer
+
+        '''
+        self.title = ''
+        self.time = ''
+        self.number = ''
+        time = self.handler.getTime()
+        constellation = "星座"
+        online = "線上" + str(self.handler.getOnlineCount()) + "人"
+        id = "我是" + self.handler.id
+        self.handler.buffer.format_put(screen.height, 0, time, len(time),
+                                 True, Colors.Cyan, Colors.Blue, Align.Center)
+        self.handler.buffer.format_put_on_cursor(constellation, len(constellation),
+                                 True, Colors.White, Colors.Magenta, Align.Center)
+        self.handler.buffer.format_put_on_cursor(online, len(online) + 10,
+                                 True, Colors.Cyan, Colors.Blue)
+        self.handler.buffer.format_put_on_cursor(id, len(id) + 20,
+                                 True, Colors.Cyan, Colors.Blue)
+        '''
 
 
 # arguments:
@@ -488,7 +475,7 @@ class login(screenlet):
         super(login, self).__init__(handler, dimension)
         self.id = ''
         self.pw = ''
-        
+
         title = u'=Welcome to BBS='
         warning = u'帳號或密碼有錯誤，請重新輸入。'
         lenwarning = len(warning.encode('big5'))
@@ -496,7 +483,7 @@ class login(screenlet):
         lenenterid = len(enterid.encode('big5'))
         enterpw = u'請輸入密碼：'
         lenenterpw = len(enterpw.encode('big5'))
-        
+
         #artwork = art(self.handler, 0, 0, self.width, self.height, '../../res/Welcome_birth')
 
         self.artwork = label(self.handler, Dimension(self.dimension.height / 2, 0, self.dimension.width, self.dimension.height), title, self.dimension.width, Align.Center, fg=ForegroundColors.White, bg=BackgroundColors.White)
@@ -507,26 +494,24 @@ class login(screenlet):
         self.pwInput = input(self.handler, Dimension(self.dimension.height / 2 + 5, lenenterpw+1, 20, 1), 20, True, visible=False)
         self.warningLabel = label(self.handler, Dimension(self.dimension.height / 2 + 6, 0, lenwarning, 1), warning, visible=False)
 
-        self.subcomponents.add(self.idLabel)
-        self.subcomponents.add(self.idInput)
-        self.subcomponents.add(self.pwLabel)
-        self.subcomponents.add(self.pwInput)
-        self.subcomponents.add(self.artwork)
-        self.subcomponents.add(self.warningLabel)
+        self.add(self.idLabel)
+        self.add(self.idInput)
+        self.add(self.pwLabel)
+        self.add(self.pwInput)
+        self.add(self.artwork)
+        self.add(self.warningLabel)
 
-        self.setFocus(self.idInput)
+        self.setFocusedControl(self.idInput)
 
     def registrationProcedures(self):
         self.handler.stack.pop()
         self.handler.stack.push(registration(self.handler, self.dimension))
-        self.handler.resetFocus()
 
     def loginProcedures(self):
         self.handler.id = self.id
         self.handler.createSession()
         self.handler.stack.pop()
         self.handler.stack.push(welcome(self.handler, self.dimension))
-        self.handler.resetFocus()
 
     def handleData(self, data=''):
         if isKey(data, return_key):
@@ -545,8 +530,8 @@ class login(screenlet):
                 self.idInput.setVisibility(False)
                 self.pwLabel.setVisibility(True)
                 self.pwInput.setVisibility(True)
-                self.setFocus(self.pwInput)
                 self.warningLabel.setVisibility(False)
+                self.setFocusedControl(self.pwInput)
 
             elif self.pwInput.visible:
                 # validate id and pw
@@ -559,7 +544,7 @@ class login(screenlet):
                     self.idInput.setVisibility(True)
                     self.pwLabel.setVisibility(False)
                     self.pwInput.setVisibility(False)
-                    self.setFocus(self.idInput)
+                    self.setFocusedControl(self.idInput)
                     self.warningLabel.setVisibility(True)
         return normal
 
@@ -590,12 +575,10 @@ class login(screenlet):
                 self.id = self.handler.buffer.input
                 if self.id == "new":
                     self.handler.push(registration, selfdestruct=True)
-                    self.handler.resetFocus()
                     return
                 if self.id == "guest":
                     self.handler.user_lookup(self.id, self.pw) # just to associate guest with IP
                     self.handler.push(welcome, selfdestruct=True)
-                    self.handler.resetFocus()
                     return
                 self.handler.buffer.finish_for_input()
                 self.changeState(1)
@@ -606,7 +589,6 @@ class login(screenlet):
                     #self.handler.buffer.print_input()
                     self.handler.buffer.finish_for_input()
                     self.handler.push(welcome, selfdestruct=True)
-                    self.handler.resetFocus()
                     return
                 else:
                     self.handler.buffer.finish_for_input()
@@ -654,7 +636,6 @@ class encoding(screenlet):
         if isKey(data, return_key):
             self.handler.stack.pop()
             self.handler.stack.push(login(self.handler, Dimension(0, 0, self.handler.width, self.handler.height)))
-            self.handler.resetFocus()
             return 1
 
         self.handler.encoding = self.options[self.list.offset + self.list.cursor]
@@ -675,16 +656,15 @@ class welcome(screenlet):
     def __init__(self, handler, dimension):
         super(welcome, self).__init__(handler, dimension)
 
-        self.footer = footer(self.handler, None, True)
+        self.anykey = anykey(self.handler)
 
-        self.subcomponents.add(self.footer)
+        self.add(self.anykey)
 
 
     def handleData(self, data=''):
         if len(data) > 0:
             self.handler.stack.pop()
             self.handler.stack.push(topMenu(self.handler, self.dimension))
-            self.handler.resetFocus()
             return clr_scr
 
         return normal
@@ -699,20 +679,23 @@ class topMenu(screenlet):
                       u"(G)ames",
                       u"(S)ettings",
                       u"(Q)uit"]
-        self.selectionMenu = selectionMenu(self.handler, Dimension(4, 20, 45, self.dimension.height - 2), Align.Left, self.items)
-        self.subcomponents.add(self.selectionMenu)
+        self.selectionMenu = selectionMenu(self.handler, Dimension(4, 20, 45, self.dimension.height - 2), self.items)
+        self.header = header(self.handler, u"【主功能表】", u"批踢踢py實業坊")
+        self.footer = footer(self.handler)
+
+        self.add(self.header)
+        self.add(self.footer)
+        self.add(self.selectionMenu)
 
     def handleData(self, data=''):
         if isKey(data, arrow_left_key):
-            self.handler.stack.pop()
-            self.handler.resetFocus()
-            return clr_scr
+            pass
         elif isKey(data, arrow_right_key) or isKey(data, return_key):
-            self.selectionMenu.requestRedrawn()
+            self.selectionMenu.redraw()
             if self.selectionMenu.getIndex() == 0: # Announcement
                 self.handler.stack.push(announce(self.handler, self.dimension))
             elif self.selectionMenu.getIndex() == 1: # Boards
-                self.handler.stack.push(boardlist(self.handler, self.dimension, "/"))
+                self.handler.stack.push(boardlist(self.handler, self.dimension, "/boards"))
             elif self.selectionMenu.getIndex() == 2: # Chatroom
                 self.handler.stack.push(notfinished(self.handler, self.dimension))
             elif self.selectionMenu.getIndex() == 3: # Games
@@ -724,7 +707,6 @@ class topMenu(screenlet):
 
                 # confirm
                 self.handler.stack.push(quit(self.handler, self.dimension))
-            self.handler.resetFocus()
             return clr_scr
 
         return normal
@@ -749,8 +731,8 @@ class notfinished(screenlet):
 
         self.msg = u'對不起，請稍後再試！'
 
-        self.subcomponents.add(footer(self.handler, self.dimension, True))
-        self.subcomponents.add(label(self.handler, Dimension(self.dimension.height / 2, 0, len(self.msg.encode('big5')), 1), self.msg))
+        self.add(footer(self.handler))
+        self.add(label(self.handler, Dimension(self.dimension.height / 2, 0, len(self.msg.encode('big5')), 1), self.msg))
 
 
     def handleData(self, data=''):
@@ -760,59 +742,82 @@ class notfinished(screenlet):
 
         return normal
 
-# deprecated
-class discussionboards(screenlet):
-    def __init__(self, handler, dimension):
-        super(discussionboards, self).__init__(handler, dimension)
+class createBoard(screenlet):
+    def __init__(self, handler, dimension, path):
+        super(createBoard, self).__init__(handler, dimension)
+        self.path = path
+        self.title = ''
+
+        warning = u'標題格式有錯誤，請重新輸入。'
+        enterid = u'請輸入看板標題： '
+
+        self.titlelabel = label(self.handler, Dimension(self.dimension.height / 2 + 5, 0, len(enterid.encode('big5')), 1), enterid)
+        self.titleinput = input(self.handler, Dimension(self.dimension.height / 2 + 5, len(enterid.encode('big5'))+1, 20, 1), 20, False)
+
+        self.warninglabel = label(self.handler, Dimension(self.dimension.height / 2 + 6, 0, len(warning.encode('big5')), 1), warning, visible=False)
+
+        self.add(self.titlelabel)
+        self.add(self.titleinput)
+        self.add(self.warninglabel)
+
+        self.setFocusedControl(self.titleinput)
 
     def handleData(self, data=''):
-        #if self.isKey(data, )
-
-        msg = "test skjdkf sdlkfjlsdkj  sdfk lkj"
-        self.handler.buffer.format_put(screen.height - 1, 0, msg, screen.width)
-
-        if self.isKey(data, arrow_left_key):
-            self.buff = []
-            self.handler.pop()    
-            return
-        elif self.isKey(data, arrow_right_key) or self.isKey(data, return_key):
-            self.buff = []
-            result = self.offset + self.cursor
-            self.handler.push(None, pathappend=str(result))
-            self.handler.resetFocus()
-            return
-
-        self.commandinterface(data)
-
-        self.buff = self.handler.loadBoardList()
-
-        # not used
-        for i, line in enumerate(open('../../res/boardlist')):
-            self.buff.append(line.strip())
-        # end
+        self.title = self.titleinput.data
+        if isKey(data, tab_key):
+            self.nextFocusedControl()
+        if isKey(data, return_key):
+            if self.handler.addBoard(self.path, self.title):
+                print "added board successfully"
+                pass
+            pass
+        return normal
 
 class announce(screenlet):
     def __init__(self, handler, dimension):
         super(announce, self).__init__(handler, dimension)
 
         self.announcements = scrollableControl(self.handler, Dimension(4, 0, self.dimension.width, self.dimension.height-2), self.handler.loadAnnouncement())
-        self.header = header(self.handler, None, u"【 主功能表 】", u"批踢踢py實業坊")
-        self.footer = footer(self.handler, None)
+        self.header = header(self.handler, u"【公佈欄】", u"批踢踢py實業坊")
+        self.footer = footer(self.handler)
 
         self.add(self.announcements)
         self.add(self.header)
         self.add(self.footer)
+
+    def handleData(self, data=''):
+        if isKey(data, arrow_left_key):
+            self.handler.stack.pop()
+            return clr_scr
+        return normal
 
 class boardlist(screenlet):
     def __init__(self, handler, dimension, cwd):
         super(boardlist, self).__init__(handler, dimension)
 
         self.cwd = cwd
-        self.boards = scrollableControl(self.handler, self.dimension, self.handler.loadBoards(self.cwd))
+        self.boards = selectionMenu(self.handler, Dimension(3, 0, self.dimension.width, self.dimension.height), self.handler.loadBoards(self.cwd))
 
-        self.header = header(self.handler, Dimension())
-        self.footer = footer()
 
+        self.administration = label(self.handler, Dimension(2, 0, self.dimension.width, 1),
+                "Key C-x creates a board here", self.dimension.width, Align.Left)
+        self.header = header(self.handler, u"【看板列表】", u"批踢踢py實業坊")
+        self.footer = footer(self.handler)
+
+        self.add(self.administration)
+        self.add(self.boards)
+
+        self.add(self.header)
+        self.add(self.footer)
+
+    def handleData(self, data=''):
+        if isKey(data, ctrl_x):
+            self.handler.stack.push(createBoard(self.handler, self.dimension, self.cwd))
+            return clr_scr
+        if isKey(data, arrow_left_key):
+            self.handler.stack.pop()
+            return clr_scr
+        return normal
 
 class threadlist(screenlet):
     def __init__(self, handler, dimension, cwd):
@@ -823,10 +828,20 @@ class threadlist(screenlet):
 
         self.header = header()
         self.footer = footer()
+    def handleData(self, data=''):
+        if isKey(data, arrow_left_key):
+            self.handler.stack.pop()
+            return clr_scr
+        return normal
 
 class threadViewer(screenlet):
     def __init__(self, handler, dimension, cwd):
         super(threadViewer, self).__init__(handler, dimension)
+    def handleData(self, data=''):
+        if isKey(data, arrow_left_key):
+            self.handler.stack.pop()
+            return clr_scr
+        return normal
 
 class editor(screenlet):
     def __init__(self, handler, dimension, content):
@@ -835,10 +850,20 @@ class editor(screenlet):
         self.content = content
 
         self.footer = footer()
+    def handleData(self, data=''):
+        if isKey(data, arrow_left_key):
+            self.handler.stack.pop()
+            return clr_scr
+        return normal
 
 class registration(screenlet):
     def __init__(self, handler, dimension):
         super(registration, self).__init__(handler, dimension)
+    def handleData(self, data=''):
+        if isKey(data, arrow_left_key):
+            self.handler.stack.pop()
+            return clr_scr
+        return normal
 
 
 def evalString(string):

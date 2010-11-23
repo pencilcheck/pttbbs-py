@@ -38,13 +38,14 @@ class Routine:
         self.encoding = u'big5'
         self.width = 80
         self.height = 24
-        self.focusLine = 0
-        self.focusColn = 0
 
     def initialize(self):
         print "Routine initializing"
         self.stack.push(screenlets.login(self, Dimension(0, 0, self.width, self.height)))
-
+        '''
+        # testing
+        self.stack.push(screenlets.boardlist(self, Dimension(0, 0, self.width, self.height), '/boards'))
+        '''
         #self.stack.push(screenlets.encoding(self, Dimension(self.height / 2 - 3, 0, self.width, self.height)))
         #dimension = Dimension(line=self.height / 2 - 3, coln=0, width=self.width, height=self.height)
         #self.stack.push(screenlets.resolution(self, dimension))
@@ -55,11 +56,7 @@ class Routine:
 
     # force will redraw all
     def draw(self, force=False):
-        return self.stack.peek().draw(force).encode(self.encoding) + screen.move_cursor(self.focusLine, self.focusColn)
-
-    def resetFocus(self):
-        self.focusLine = -1
-        self.focusColn = -1
+        return self.stack.peek().draw(force).encode(self.encoding)
 
     def setWidth(self, width):
         self.width = width
@@ -75,12 +72,12 @@ class Routine:
     def getOnlineCount(self):
         return 0
 
-    def getTime(self, time=localtime()):
+    def time(self, time=localtime()):
         #print strftime("%m/%d %a %Y %H:%M", time)
         return strftime("%m/%d %a %Y %H:%M", time)
 
     def createSession(self):
-        print "creating session at", datetime.datetime.today() 
+        print "creating session at", datetime.datetime.today()
         t = (self.id, self.address[0], self.address[1], datetime.datetime.today())
         db.instance.cursor.execute('update Sessions set UId=?, IP=?, Port=?, LoginTime=?', t)
         db.instance.commit()
@@ -154,43 +151,34 @@ class Routine:
             pass
     
     # loads board content at given level and index, either board list or thread list or threads
-    def loadBoardList(self):
-        print "loadBoardList"
-        if self.path == None or self.path == "":
-            query = (0,)
-            try:
-                '''
-                db.instance.cursor.execute("select * from BoardFileSystem")
-                for line in db.instance.cursor:
-                    print line
-                '''
-                db.instance.cursor.execute("select * from BoardFileSystem where Path LIKE \'_\' and Type = ?", query)
-                tmp = []
-                for line in db.instance.cursor:
-                    #print line
-                    tmp.append(line)
-                    
-                result = [item[4].encode('BIG5') for item in tmp]
-                #print result
-                return result
-            except:
-                print "db execute error"
+    def loadBoards(self, cwd):
+        print "loadBoards", cwd
+        if cwd == "":
+            return []
 
-        else:
-            print "path", self.path
-            query = (self.path + '-' + '%', 0,)
-            try:
-                db.instance.cursor.execute("select * from BoardFileSystem where Path LIKE ? and Type = ?", query)
-                tmp = []
-                for line in db.instance.cursor:
-                    print line
-                    tmp.append(line)
-                    
-                result = [item[4].encode('BIG5') for item in tmp]
-                print result
-                return result
-            except:
-                print "db execute error"
+        query = (cwd + '%',)
+        try:
+            db.instance.cursor.execute("select * from Boards where Path LIKE ?", query)
+            tmp = []
+            for record in db.instance.cursor:
+                print record
+                tmp.append(record[1])
+            return tmp
+        except:
+            print "db execution error"
+            return []
+
+    def addBoard(self, path, title):
+        print "adding board", title, "to", path
+
+        board = (path, title, self.id, datetime.datetime.today(),)
+        try:
+            db.instance.cursor.execute('insert into Boards (Path, Title, CreatorId, CreationDate) VALUES (?, ?, ?, ?)', board)
+            db.instance.commit()
+        except:
+            print "db execution error"
+            return 0
+        return 1
 
 class ViewStack:
     # each element in the stack is a tuple ((x, y, width, height), screenlet)
