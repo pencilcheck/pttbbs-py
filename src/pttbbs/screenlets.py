@@ -63,57 +63,6 @@ def isDoubleByte(data):
     else:
         return False
 
-class Node:
-    def __init__(self, control, minAuth=0, next=None):
-        self.component = component
-        self.minAuth = minAuth
-        self.redrawn = False
-        self.visible = True
-        self.next = next
-
-class Nodes:
-    def __init__(self):
-        self.focusChain = []
-        self.focusNode = None
-
-    def add(self, component, parents=[], minAuth=0):
-        print "adding", component, "with parent", parents, "minAuth", minAuth
-
-        if isinstance(component, control):
-            print "component buffer:", repr(component.buffer)
-            if len(self.focusChain) > 0:
-                node = Node(component, parents, minAuth, self.focusChain[0])
-                self.focusChain[-1].next = node
-                self.focusChain.append(node)
-            else:
-                node = Node(component, parents, minAuth)
-                node.next = node
-                self.focusChain.append(node)
-        else:
-            for comp in component.subcomponents.chain():
-                self.add(comp.component, parents=parents + [component], minAuth=minAuth)
-
-
-    def chain(self):
-        return self.focusChain
-
-    def setFocusNode(self, component):
-        if isinstance(component, screenlet):
-            return
-        for node in self.focusChain:
-            if node.component == component:
-                self.focusNode = node
-
-
-    def getFocusNode(self):
-        if not self.focusNode:
-            self.focusNode = self.focusChain[0]
-        return self.focusNode
-
-    def passFocus(self):
-        self.focusNode = self.focusNode.next
-
-
 # arguments:
 # *handler - the routine class
 # *dimension - a Dimension object
@@ -154,10 +103,6 @@ class screenlet(object):
 
         return self.handleData(data)
 
-    """
-    def draw(self, force=False): # force will redrawn all components
-        return self.subcomponents.draw(force)
-    """
     def draw(self, force=False):
         self.buffer = ""
         for item in self.controls:
@@ -547,110 +492,6 @@ class login(screenlet):
                     self.setFocusedControl(self.idInput)
                     self.warningLabel.setVisibility(True)
         return normal
-
-    # the methodology behind this is always static first, always the lowest layer first, think of layers, paint the least
-    # dynamic layer first
-    def content(self, data=''):
-        
-        # draw background
-        self.drawScrFromFile("../../res/Welcome_login")
-    
-        #mon = str(localtime().tm_mon)
-   
-        self.handler.buffer.put(23, 0, "觀光局邀您分享遊記、相片，福斯汽車、百萬獎勵讓您玩遍台灣!http://ppt.cc/w4vV")
-        if self.state == 1:
-                self.handler.buffer.put(22, 0, "請輸入密碼： ")
-        
-        self.handler.buffer.put(21, 0, "請輸入帳號，或以 guest 參觀，或以 new 註冊： ") # offset 45
-
-
-
-        if self.state == 0:
-            self.handler.buffer.ready_for_input(13, 21, 45)
-        elif self.state == 1:
-            self.handler.buffer.ready_for_input(20, 22, 13, False)
-
-        if self.isKey(data, return_key): # return pressed
-            if self.state == 0: # user id
-                self.id = self.handler.buffer.input
-                if self.id == "new":
-                    self.handler.push(registration, selfdestruct=True)
-                    return
-                if self.id == "guest":
-                    self.handler.user_lookup(self.id, self.pw) # just to associate guest with IP
-                    self.handler.push(welcome, selfdestruct=True)
-                    return
-                self.handler.buffer.finish_for_input()
-                self.changeState(1)
-
-            else: # password
-                self.pw = self.handler.buffer.input
-                if self.handler.user_lookup(self.id, self.pw) == 0: # 0 success
-                    #self.handler.buffer.print_input()
-                    self.handler.buffer.finish_for_input()
-                    self.handler.push(welcome, selfdestruct=True)
-                    return
-                else:
-                    self.handler.buffer.finish_for_input()
-                    self.changeState(0)
-                    self.handler.buffer.put(22, 0, "帳號或密碼有錯誤，請重新輸入。")
-        elif self.isKey(data, backspace_key): # backspace pressed 
-            self.handler.buffer.backspace_input()
-        elif self.isKey(data, arrow_up_key):
-            pass
-        elif self.isKey(data, arrow_down_key):
-            pass
-        elif self.isKey(data, arrow_right_key):
-            self.handler.buffer.move_right_input()
-        elif self.isKey(data, arrow_left_key):
-            self.handler.buffer.move_left_input()
-        else:
-            # BIG5
-            # ascii
-            if data and '\xa1' <= data <= '\xf9' \
-            or '\x1f' < data < '\x7f' :
-                self.handler.buffer.add_to_input(data)
-
-        self.handler.buffer.hide_cursor() # doesn't work QQ
-        self.handler.buffer.print_input()
-
-        self.calls = self.calls + 1
-
-
-class encoding(screenlet):
-    def __init__(self, handler, dimension):
-        super(encoding, self).__init__(handler, dimension)
-        self.confirm = label(self.handler, Dimension(self.dimension.height, 0, self.dimension.width, self.dimension.height), u'如果你可以看到這段句子，請按確認鍵繼續。')
-
-        self.options = [u"utf8", u"big5"]
-        self.list = selectionMenu(self.handler, Dimension(self.dimension.height / 2, 0, self.dimension.width, self.dimension.height), Align.Center, self.options)
-        self.list.focus = True
-        self.list.focusLine = -1
-        self.list.focusColn = -1
-
-        self.subcomponents.append(self.confirm)
-        self.subcomponents.append(self.list)
-
-    # return 1 if clear screen is needed
-    def handleData(self, data=''):
-        if isKey(data, return_key):
-            self.handler.stack.pop()
-            self.handler.stack.push(login(self.handler, Dimension(0, 0, self.handler.width, self.handler.height)))
-            return 1
-
-        self.handler.encoding = self.options[self.list.offset + self.list.cursor]
-        #print "encoding is", self.handler.encoding, "and", self.subcomponents[1].offset + self.subcomponents[1].cursor
-        return 0
-
-class resolution(screenlet):
-    def __init__(self, handler, line, coln, width, height):
-        super(resolution, self).__init__(handler, line, coln, width, height)
-        self.focusable = True
-        print "resolution init"
-
-        self.buffs.append("80x24")
-        self.buffs.append("160x24")
-        self.buffs.append("80x48")
 
 class welcome(screenlet):
     def __init__(self, handler, dimension):

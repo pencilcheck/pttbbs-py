@@ -46,9 +46,6 @@ class Routine:
         # testing
         self.stack.push(screenlets.boardlist(self, Dimension(0, 0, self.width, self.height), '/boards'))
         '''
-        #self.stack.push(screenlets.encoding(self, Dimension(self.height / 2 - 3, 0, self.width, self.height)))
-        #dimension = Dimension(line=self.height / 2 - 3, coln=0, width=self.width, height=self.height)
-        #self.stack.push(screenlets.resolution(self, dimension))
 
     # update screenlets and return 1 if needed clear screen (e.g. screenlet switching)
     def update(self, data=''):
