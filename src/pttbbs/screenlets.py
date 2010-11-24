@@ -80,18 +80,25 @@ class screenlet(object):
         self.controls.append(control)
 
     def focusedControl(self):
-        return self.controls[self.focusIndex] if self.focusIndex else None
+        return self.controls[self.focusIndex] if self.focusIndex != None else None
 
     def nextFocusedControl(self):
         if self.focusIndex == len(self.controls)-1:
+            self.controls[self.focusIndex].focused = False
             self.focusIndex == 0
+            self.controls[self.focusIndex].focused = True
         else:
+            self.controls[self.focusIndex].focused = False
             self.focusIndex += 1
+            self.controls[self.focusIndex].focused = True
 
     def setFocusedControl(self, control):
         for i, item in enumerate(self.controls):
+            item.focused = False
             if item == control:
                 self.focusIndex = i
+                item.focused = True
+                return
 
     def update(self, data=''):
         for i, item in enumerate(self.controls):
@@ -133,6 +140,7 @@ class control(object):
         self.buffer = ""
         self.visible = kwargs['visible'] if 'visible' in kwargs else True
         self.minACL = kwargs['minACL'] if 'minACL' in kwargs else 0
+        self.focused = False
         self.focusLine = kwargs['focusLine'] if 'focusLine' in kwargs else self.dimension.line
         self.focusColn = kwargs['focusColn'] if 'focusColn' in kwargs else self.dimension.coln
         self.redrawn = False
@@ -313,11 +321,12 @@ class input(control):
             self.internalCursor = self.internalCursor - n
 
     def backSpace(self):
-        if self.internalCursor > 0:
+        if self.internalCursor == 0:
+            self.data = screen.commands['BEL']
+
+        elif self.internalCursor > 0:
             self.data = self.data[:self.internalCursor-1] + self.data[self.internalCursor:]
             self.moveLeft(1)
-        if self.internalCursor == 0 and len(self.data) == 0:
-            self.data = screen.commands['BEL']
 
     def addInput(self, data):
         if len(self.data) < self.length-1: # minus 1 for the cursor
@@ -328,9 +337,9 @@ class input(control):
 
     def update(self, data=''):
         print "input update"
-        if len(self.data) > 0 and self.data[-1] == screen.commands['BEL']:
-            print repr(self.data), repr(screen.commands['BEL'])
-            self.data = self.data[:-1]
+        if screen.commands['BEL'] in self.data:
+            self.data = self.data.replace(screen.commands['BEL'], '')
+
         if isKey(data, backspace_key): # backspace pressed
             self.redrawn = True
             self.backSpace()
@@ -345,19 +354,87 @@ class input(control):
             if data > '\x20':
                 self.redrawn = True
                 self.addInput(data)
-                print "adding input data"
+                print "adding input data", repr(data)
 
         if not self.concealed:
             self.focusColn = self.dimension.coln + self.insert()
 
 
     def draw(self):
+        self.buffer = ''
         if self.concealed:
             self.buffer = screen.format_puts(self.dimension.line, self.dimension.coln, self.data, self.length, Align.Left, fg=ForegroundColors.Black, bg=BackgroundColors.Black, concealed=self.concealed)
         else:
             self.buffer = screen.format_puts(self.dimension.line, self.dimension.coln, self.data, self.length, Align.Left, fg=ForegroundColors.Black, bg=BackgroundColors.White, concealed=self.concealed)
-        print "input data", repr(self.data)
         print "input draw", repr(self.buffer)
+        return self.buffer
+
+# arguments:
+# *handler - the routine class
+# *dimension - a Dimension object
+# keywords: focusLine, focusColn, visible, minACL
+class multilineinput(control):
+    def __init__(self, handler, dimension, **kwargs):
+        super(multilineinput, self).__init__(handler, dimension, **kwargs)
+        self.cursor = [0,0] # line, coln
+        self.inputs = []
+        for i in xrange(self.dimension.height):
+            self.inputs.append(input(self.handler, Dimension(self.dimension.line + i, self.dimension.coln, self.dimension.width, 1), self.dimension.width))
+
+    def data(self):
+        return '\n'.join([d.data for d in self.inputs])
+
+    def update(self, data=''):
+        print "multi-line input update"
+        self.redrawn = True
+        self.inputs[self.cursor[0]].update(data)
+        self.cursor[1] = self.inputs[self.cursor[0]].focusColn
+
+        if isKey(data, return_key):
+            self.cursor[0] += 1 # more work to do actually, need to move all data one input below
+            self.cursor[1] = self.inputs[self.cursor[0]].focusColn
+        elif isKey(data, arrow_up_key):
+            if self.cursor[0] > 0:
+                self.cursor[0] -= 1
+                self.cursor[1] = self.inputs[self.cursor[0]].focusColn
+        elif isKey(data, arrow_down_key):
+            if self.cursor[0] < self.dimension.height:
+                self.cursor[0] += 1
+                self.cursor[1] = self.inputs[self.cursor[0]].focusColn
+
+        self.focusLine = self.dimension.line + self.cursor[0]
+        self.focusColn = self.cursor[1] + 1
+
+
+    def draw(self):
+        self.buffer = ''
+        for i, text in enumerate(self.inputs):
+            self.buffer += text.draw()
+        return self.buffer
+
+
+# arguments:
+# *handler - the routine class
+# *dimension - a Dimension object
+# *labelText - the label text
+# keywords: focusLine, focusColn, visible, minACL, allowedOps
+class optionInput(control):
+    def __init__(self, handler, dimension, labelText, **kwargs):
+        super(optionInput, self).__init__(handler, dimension, **kwargs)
+
+        self.allowedOps = kwargs['allowedOps'] if 'allowedOps' in kwargs else ['Y', 'N']
+        self.labelText = labelText + '[' + '/'.join(self.allowedOps) + ']'
+        self.label = label(self.handler, Dimension(self.dimension.line, self.dimension.coln, len(self.labelText.encode('big5')), 1), self.labelText)
+        self.input = input(self.handler, Dimension(self.dimension.line, self.dimension.coln + len(self.labelText.encode('big5')) + 1, self.dimension.width, 1), max([len(a) for a in self.allowedOps]) + 1)
+
+    def update(self, data=''):
+        self.redrawn = True
+        self.input.update(data)
+        self.focusLine = self.input.focusLine
+        self.focusColn = self.input.focusColn
+
+    def draw(self):
+        self.buffer = self.label.draw() + self.input.draw()
         return self.buffer
 
 # arguments:
@@ -610,9 +687,67 @@ class createBoard(screenlet):
         if isKey(data, return_key):
             if self.handler.addBoard(self.path, self.title):
                 print "added board successfully"
-                pass
-            pass
+                self.handler.stack.pop() #destroy it
+                self.handler.stack.push(boardlist(self.handler, self.dimension, self.path))
+                return clr_scr
+            else:
+                self.warninglabel.setVisibility(True)
         return normal
+
+class createThread(screenlet):
+    def __init__(self, handler, dimension, path):
+        super(createThread, self).__init__(handler, dimension)
+        self.path = path
+        self.title = ''
+        self.content = ''
+
+        warning = u'標題格式有錯誤，請重新輸入。'
+        enterid = u'請輸入看板標題： '
+
+        self.titlelabel = label(self.handler, Dimension(3, 0, len(enterid.encode('big5')), 1), enterid)
+        self.titleinput = input(self.handler, Dimension(3, len(enterid.encode('big5'))+1, 20, 1), 20, False)
+
+        self.warninglabel = label(self.handler, Dimension(4, 0, len(warning.encode('big5')), 1), warning, visible=False)
+
+        # need a control for multi-line input
+        self.contentinput = multilineinput(self.handler, Dimension(6, 0, self.dimension.width, 5))
+
+        # need a control for confirmation
+        self.confirmationinput = optionInput(self.handler, Dimension(self.dimension.height - 3, 0, self.dimension.width, 1), u'請確認：')
+
+        self.add(self.titlelabel)
+        self.add(self.titleinput)
+        self.add(self.warninglabel)
+        self.add(self.contentinput)
+        self.add(self.confirmationinput)
+
+        self.setFocusedControl(self.titleinput)
+
+    def handleData(self, data=''):
+        self.title = self.titleinput.data
+        self.content = self.contentinput.data()
+        if isKey(data, tab_key):
+            if self.titleinput.focused:
+                self.setFocusedControl(self.contentinput)
+
+            elif self.contentinput.focused:
+                self.setFocusedControl(self.confirmationinput)
+
+            elif self.confirmationinput.focused:
+                self.setFocusedControl(self.titleinput)
+
+        if isKey(data, return_key):
+            if self.confirmationinput.focused and self.confirmationinput.input.data == u'Y':
+                if self.handler.addThread(self.path + '/' + self.title, self.title, self.content):
+                    print "added thread successfully"
+                    self.handler.stack.pop() #destroy it
+                    self.handler.stack.push(threadlist(self.handler, self.dimension, self.path))
+                    return clr_scr
+            else:
+                self.setFocusedControl(self.contentinput)
+
+        return normal
+
 
 class announce(screenlet):
     def __init__(self, handler, dimension):
@@ -653,10 +788,15 @@ class boardlist(screenlet):
 
     def handleData(self, data=''):
         if isKey(data, ctrl_x):
+            self.handler.stack.pop() # destroy it first
             self.handler.stack.push(createBoard(self.handler, self.dimension, self.cwd))
             return clr_scr
-        if isKey(data, arrow_left_key):
+        elif isKey(data, arrow_left_key):
             self.handler.stack.pop()
+            return clr_scr
+        elif isKey(data, arrow_right_key):
+            self.boards.redraw()
+            self.handler.stack.push(threadlist(self.handler, self.dimension, self.cwd + '/' + self.boards.menulist[self.boards.getIndex()]))
             return clr_scr
         return normal
 
@@ -665,13 +805,30 @@ class threadlist(screenlet):
         super(threadlist, self).__init__(handler, dimension)
 
         self.cwd = cwd
-        self.threads = scrollableControl(self.handler, self.dimension, self.handler.loadThreads(self.cwd))
+        self.threads = selectionMenu(self.handler, Dimension(3, 0, self.dimension.width, self.dimension.height), self.handler.loadThreads(self.cwd))
 
-        self.header = header()
-        self.footer = footer()
+        self.administration = label(self.handler, Dimension(2, 0, self.dimension.width, 1), "Key C-x creates a thread", self.dimension.width, Align.Left)
+
+        self.header = header(self.handler, u"【版主：】", u"批踢踢py實業坊")
+        self.footer = footer(self.handler)
+
+        self.add(self.administration)
+        self.add(self.threads)
+
+        self.add(self.header)
+        self.add(self.footer)
+
     def handleData(self, data=''):
-        if isKey(data, arrow_left_key):
+        if isKey(data, ctrl_x):
+            self.handler.stack.pop() #destroy it first
+            self.handler.stack.push(createThread(self.handler, self.dimension, self.cwd))
+            return clr_scr
+        elif isKey(data, arrow_left_key):
             self.handler.stack.pop()
+            return clr_scr
+        elif isKey(data, arrow_right_key):
+            self.threads.redraw()
+            self.handler.stack.push(threadViewer(self.handler, self.dimension, self.cwd + '/' + self.threads.menulist[self.threads.getIndex()]))
             return clr_scr
         return normal
 

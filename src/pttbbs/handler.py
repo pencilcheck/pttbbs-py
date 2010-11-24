@@ -20,6 +20,7 @@
 import pickle
 import datetime
 from time import strftime, localtime
+import codecs
 
 import db
 import screen
@@ -123,8 +124,8 @@ class Routine:
 
         l = []
 
-        for line in open('announce.txt'):
-            print line
+        for line in codecs.open('announce.txt', 'r', 'utf-8'):
+            print line, repr(line)
             l.append(line)
 
         return l
@@ -146,8 +147,8 @@ class Routine:
             return function
         except:
             pass
-    
-    # loads board content at given level and index, either board list or thread list or threads
+
+    # loads boards with given cwd
     def loadBoards(self, cwd):
         print "loadBoards", cwd
         if cwd == "":
@@ -172,8 +173,38 @@ class Routine:
         try:
             db.instance.cursor.execute('insert into Boards (Path, Title, CreatorId, CreationDate) VALUES (?, ?, ?, ?)', board)
             db.instance.commit()
-        except:
-            print "db execution error"
+        except Exception as e:
+            print "exception:", e
+            return 0
+        return 1
+
+    # loads threads with given cwd
+    def loadThreads(self, cwd):
+        print "loadThreads", cwd
+        if cwd == "":
+            return []
+
+        query = (cwd + '%',)
+        try:
+            db.instance.cursor.execute("select * from Threads where Path LIKE ?", query)
+            tmp = []
+            for record in db.instance.cursor:
+                print record
+                tmp.append(record[1])
+            return tmp
+        except Exception as e:
+            print "exception:", e
+            return []
+
+    def addThread(self, path, title, content):
+        print "adding thread", title, "to", path, "with", repr(content)
+
+        thread = (path, title, self.id, content, datetime.datetime.today(),)
+        try:
+            db.instance.cursor.execute('insert into Threads (Path, Title, AuthorId, Content, CreationDate) VALUES (?, ?, ?, ?, ?)', thread)
+            db.instance.commit()
+        except Exception as e:
+            print "exception:", e
             return 0
         return 1
 
