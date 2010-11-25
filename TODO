@@ -4,6 +4,8 @@
     * Make it infinitely scrollable (or set a very high limit) - 0%
 * Create options input - 0%
     * remove input, make it like terminal style - 0%
+* Createthread add BIG5 punctuation table (like ptt) for use - 0%
+* Let users able to see threads and boards in the same screen sorted - 0%
 * Complete thread viewer - 0%
 * Complete Chatroom - 0%
 * Complete User Settings along with db changes - 0%
