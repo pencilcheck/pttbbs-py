@@ -180,76 +180,12 @@ def move_cursor_right(N):
 def move_cursor_left(N):
     return '\033[' + str(N) + 'D'
 
-# arguments for puts:
-# msg
-# row, coln, msg
-# or above two with keyword arguments: fg, bg, concealed
-def puts(*args, **kwargs):
-    '''
-    if len(args) == 1:
-        print "puts", args[0], args, kwargs
-    else:
-        print "puts", args[2], args, kwargs
-    '''
-    instructions = ""
-    if len(args) == 1:
-        if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs:
-                instructions = format(args[0], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
-            else:
-                instructions = format(args[0], fg=kwargs['fg'], bg=kwargs['bg'])
-        else:
-            if 'concealed' in kwargs:
-                instructions = format(args[0], concealed=kwargs['concealed'])
-            else:
-                instructions = args[0]
+def puts(row, coln, msg, length=None, align=Align.Left, **kwargs):
+    ifg = kwargs['fg'] if 'fg' in kwargs else ForegroundColors.White
+    ibg = kwargs['bg'] if 'bg' in kwargs else BackgroundColors.Black
 
-    if len(args) == 3:
-        if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs:
-                instructions = move_cursor(args[0], args[1]) + format(args[2], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
-            else:
-                instructions = move_cursor(args[0], args[1]) + format(args[2], fg=kwargs['fg'], bg=kwargs['bg'])
-        else:
-            if 'concealed' in kwargs:
-                instructions = move_cursor(args[0], args[1]) + format(args[2], concealed=kwargs['concealed'])
-            else:
-                instructions = move_cursor(args[0], args[1]) + args[2]
-    return instructions
+    return move_cursor(row, coln) + format(msg, length, align, fg=ifg, bg=ibg)
 
-# arguments for format_puts:
-# msg, length, align
-# row, coln, msg, length, align
-# or above two with keyword arguments: fg, bg, concealed
-def format_puts(*args, **kwargs):
-    '''
-    if len(args) == 3:
-        print "format_puts", args[0], args, kwargs
-    else:
-        print "format_puts", args[2], args, kwargs
-    '''
-    instructions = ""
-    if len(args) == 3:
-        if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs and kwargs['concealed']:
-                instructions = format(args[0], args[1], args[2], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
-            else:
-                instructions = format(args[0], args[1], args[2], fg=kwargs['fg'], bg=kwargs['bg'])
-        
-        if len(kwargs) == 0:
-            instructions = format(args[0], args[1], args[2])
-    
-    if len(args) == 5:
-        if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs and kwargs['concealed']:
-                instructions = move_cursor(args[0], args[1]) + format(args[2], args[3], args[4], fg=kwargs['fg'], bg=kwargs['bg'], concealed=kwargs['concealed'])
-            else:
-                instructions = move_cursor(args[0], args[1]) + format(args[2], args[3], args[4], fg=kwargs['fg'], bg=kwargs['bg'])
-        
-        if len(kwargs) == 0:
-            instructions = move_cursor(args[0], args[1]) + format(args[2], args[3], args[4])
-    
-    return instructions
 
 def fillBlank(dimension):
     instructions = move_cursor(dimension.line, dimension.coln)
@@ -257,16 +193,17 @@ def fillBlank(dimension):
         instructions += " "*dimension.width + move_cursor_down(1) + move_cursor_left(dimension.width)
     return instructions
 
-# arguments for attributes:
-# any array of colors
-def attributes(*args):
+def attributes(args):
     return ''.join(['\033[' + x + 'm' for x in args])
 
-def adjust(msg, length, align):
+def padding(msg, length, align):
+    if not length:
+        return msg
+
     realen = len(msg.encode('big5'))
     if length < realen:
         return msg[:length]
-    
+
     remains = length - realen
 
     if align == Align.Left or align == None:
@@ -281,202 +218,8 @@ def adjust(msg, length, align):
 
     return left + msg + right
 
-# arguments for format:
-# msg
-# msg, length, align
-# or above with keyword arguments: fg, bg, concealed
-def format(*args, **kwargs):
-    if len(args) == 1:
-        if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs and kwargs['concealed']:
-                return attributes(kwargs['fg'], kwargs['bg'], concealed) + reset
-            else:
-                return attributes(kwargs['fg'], kwargs['bg']) + args[0] + reset
+def format(msg, length=None, align=Align.Left, **kwargs):
+    args = [values for values in kwargs.values()]
+    print "format args:", args
 
-        if len(kwargs) == 0:
-            return args[0]
-
-    if len(args) == 3:
-        if 'fg' in kwargs and 'bg' in kwargs:
-            if 'concealed' in kwargs and kwargs['concealed']:
-                return attributes(kwargs['fg'], kwargs['bg']) + adjust('', args[1], args[2]) + reset
-            else:
-                return attributes(kwargs['fg'], kwargs['bg']) + adjust(args[0], args[1], args[2]) + reset
-
-        if len(kwargs) == 0:
-            return adjust(args[0], args[1], args[2])
-
-
-
-
-"""
-class Tools:
-    
-    def __init__(self, sock):
-        self.temp = []
-        
-        self.echo = True
-        
-        self.cursor_line = 0
-        self.cursor_coln = 0
-        
-        self.ready = False    
-        
-        self.protocol = sock
-    
-    def put_on_cursor(self, msg):
-        self.protocol.send(str(msg))
-        self.cursor_coln = self.cursor_coln + len(msg)
-    
-    def put(self, row, coln, msg):
-        self.move_cursor(row, coln)
-        self.put_on_cursor(msg)
-    
-    def format_put_on_cursor(self, msg, maxLen, light=None, fg=None, bg=None, align=Align.Left, highlight=False):
-        if highlight:
-            light = True
-            fg = Colors.Black
-            bg = Colors.Yellow
-            # maybe add an arrow on the right pointing to the right
-        self.put_on_cursor(self.format(light, fg, bg, msg, maxLen, align))
-        
-    def format_put(self, row, coln, msg, maxLen, light=None, fg=None, bg=None, align=Align.Left, highlight=False):
-        if highlight:
-            light = True
-            fg = Colors.Black
-            bg = Colors.Yellow
-            # maybe add an arrow on the right pointing to the right
-        self.put(row, coln, self.format(light, fg, bg, msg, maxLen, align))
-
-    def ready_for_input(self, maxLen, line=None, coln=None, ech=True):
-        if not self.ready:
-            self.input = ''
-            self.limit = maxLen
-            self.ready = True
-            self.insert = 0
-            self.input_line = line if line != None else self.input_line
-            self.input_coln = coln if coln != None else self.input_coln
-            self.echo = ech
-    
-    
-    # print input will erase line from the position of the input box to the end of line first then print input
-    def print_input(self, input_light=False, input_fg=Colors.Black, input_bg=Colors.White):
-        if self.ready:
-            self.put(self.input_line, self.input_coln, eratocol)
-            if self.echo:
-                self.format_put(self.input_line, self.input_coln, self.input, self.limit, input_light, input_fg, input_bg)
-                self.move_cursor(self.input_line, self.input_coln + self.insert)
-            else:
-                self.format_put(self.input_line, self.input_coln, '*'*len(self.input), self.limit, False, Colors.Black, Colors.Black)
-                self.move_cursor(self.input_line, self.input_coln)
-    
-    def add_to_input(self, data):
-        if self.ready:
-            if len(self.input) < self.limit-1: # minus 1 for the cursor
-                self.input = self.input[:self.insert] + data + self.input[self.insert:]
-                
-                # watch out for double byte
-                self.insert = self.insert + len(data)
-    
-    def move_left_input(self, n=1):
-        if self.ready:
-            if self.insert - n >= 0:
-                self.insert = self.insert - n
-    
-    def move_right_input(self, n=1):
-        if self.ready:
-            if self.insert + n < self.limit and self.insert < len(self.input):
-                self.insert = self.insert + n
-    
-    def backspace_input(self):
-        if self.ready:
-            if self.insert > 0:
-                # check for double byte character
-                self.input = self.input[:self.insert-1] + self.input[self.insert:]
-                self.move_left_input(1)
-                if len(self.input) > 0:
-                    if self.input[-1] >= '\xa1' and self.input[-1] <= '\xf9': # BIG5
-                        self.input = self.input[:self.insert-1] + self.input[self.insert:]
-                        self.move_left_input(1)
-                
-                # not used
-                if len(self.id) == 1:
-                    if self.id[-1] > '\x1f' and self.id[-1] < '\x7f':
-                        self.id = self.id[:-1]
-                
-                if len(self.id) >= 2: # check for double byte character
-                    if self.id[-2] > '\xa1' and self.id[-2] < '\xf9': # BIG5
-                        print '1'
-                        self.id = self.id[:-2]
-                    elif self.id[-2] > '\x4e' and self.id[-2] < '\x9f': # Utf-8
-                        print '2', repr(self.id[-2])
-                        self.id = self.id[:-2]
-                    elif self.id[-1] > '\x1f' and self.id[-1] < '\x7f':
-                        self.id = self.id[:-1]
-                # end
-                
-    
-    def finish_for_input(self):
-        self.ready = False
-    
-    def hide_cursor(self):
-        self.put_on_cursor(hide)
-    
-    def show_cursor(self):
-        self.put_on_cursor(show)
-    
-    def move_cursor(self, row, coln):
-        self.cursor_line = row
-        self.cursor_coln = coln
-        self.protocol.send('\033[' + str(row) + ';' + str(coln) + 'H')
-    
-    def move_cursor_up(self, N):
-        self.cursor_line = self.cursor_line - N
-        self.protocol.send('\033[' + str(N) + 'A')
-    
-    def move_cursor_down(self, N):
-        self.cursor_line = self.cursor_line + N
-        self.protocol.send('\033[' + str(N) + 'B')
-    
-    def move_cursor_right(self, N):
-        self.cursor_coln = self.cursor_coln + N
-        self.protocol.send('\033[' + str(N) + 'C')
-    
-    def move_cursor_left(self, N):
-        self.cursor_coln = self.cursor_coln - N
-        self.protocol.send('\033[' + str(N) + 'D')
-    
-    def clr_scr(self):
-        self.protocol.send(clr)
-    
-    def escape_sequence(self, light, fg_color, bg_color):
-        arr = []
-        if light != None:
-            arr.append(str(int(light)))
-        if fg_color != None:
-            arr.append(fg + str(fg_color))
-        if bg_color != None:
-            arr.append(bg + str(bg_color))
-        return prefix + delim.join(arr) + end
-    
-    def adjust(self, align, msg, maxLen):
-        if maxLen < len(msg):
-            return msg
-        
-        #remains = width - self.cursor_coln
-        remains = maxLen
-        
-        ret = ''
-    
-        if align == Align.Center:
-            ret = ret + ' '*(remains / 2 - len(msg) / 2)
-        elif align == Align.Right:
-            ret = ret + ' '*(remains - len(msg))
-            
-        ret = ret + msg + ' '*(remains - len(msg) - len(ret))
-        return ret
-    
-    # assuming len(msg) and maxLen are both < width 
-    def format(self, light, fg_color, bg_color, msg, maxLen, alignment=Align.Left):
-        return self.escape_sequence(light, fg_color, bg_color) + self.adjust(alignment, msg, maxLen) + color_reset
-"""
+    return attributes(args) + padding(msg, length, align) + (reset if len(args) > 0 else '')

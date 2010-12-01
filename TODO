@@ -1,15 +1,18 @@
 == TODO for pttbbs-py ==
 * Complete administrative commands interface and mechanism - 10%
-* Implement multi-line input - 50%
+* Implement multi-line input - 10%
+    * Make all input works - 0%
     * Make it infinitely scrollable (or set a very high limit) - 0%
-* Create options input - 0%
-    * remove input, make it like terminal style - 0%
+* Create options input - 10%
+    * remove input, make it like terminal style - 100%
+    * refine it - 0%
 * Createthread add BIG5 punctuation table (like ptt) for use - 0%
 * Let users able to see threads and boards in the same screen sorted - 0%
 * Complete thread viewer - 0%
 * Complete Chatroom - 0%
 * Complete User Settings along with db changes - 0%
 * BIG5 Animation display and editor - 0%
+* Reply in threads - 0%
 
 == TODO for optimization and scaling ==
 * Cython integration - 0%

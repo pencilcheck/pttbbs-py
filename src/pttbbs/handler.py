@@ -191,6 +191,20 @@ class Routine:
             return 0
         return 1
 
+    def loadThread(self, cwd):
+        print "loadThread", cwd
+        if cwd == "":
+            return []
+
+        query = (cwd,)
+        try:
+            db.instance.cursor.execute("select * from Threads where Path = ?", query)
+
+            return db.instance.cursor.fetchone()[3] #content
+        except Exception as e:
+            print "exception:", e
+            return []
+
 class ViewStack:
     # each element in the stack is a tuple ((x, y, width, height), screenlet)
     # the size is set by Routine
