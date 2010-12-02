@@ -309,45 +309,69 @@ class input(control):
 class multilineinput(control):
     def __init__(self, routine, dimension, **kwargs):
         super(multilineinput, self).__init__(routine, dimension, **kwargs)
-        self.cursor = 0
+        self.index = 0 # this is the focus index for the inputs
+        self.bounds = 0 # it is actually just lower bound
         self.inputs = [input(self.routine, Dimension(self.dimension.line + i, self.dimension.coln, self.dimension.width, 1)) for i in xrange(self.dimension.height)]
-        self.display = [self.cursor, self.dimension.height] # start index, length
+        self.texts = [("", 0)]*self.dimension.height
 
     def data(self):
-        return '\n'.join([d.data for d in self.inputs])
+        #return '\n'.join([d.data for d in self.inputs])
+        return '\n'.join([text[0] for text in self.texts])
 
     def update(self, data=''):
-        self.inputs[self.cursor].update(data)
-        self.redrawn = self.inputs[self.cursor].redrawn
 
+        # update self.texts
         if isKey(data, return_key):
-            # more work to do actually, need to move all data one input below
-            if self.cursor == self.display[1]-1:
-                self.display = [x+1 for x in self.display]
-                if self.display[1] > len(self.inputs):
-                    self.inputs.append(input(self.routine, Dimension(self.dimension.line + i, self.dimension.coln, self.dimension.width, 1)))
-            self.cursor += 1 if self.cursor < len(self.inputs)-1 else 0
+            coln = self.texts[self.index + self.bounds][1]
+            fragment = self.texts[self.index + self.bounds][0][coln:]
+            print coln, fragment
+            self.texts[self.index + self.bounds] = (self.texts[self.index + self.bounds][0][:coln], self.texts[self.index + self.bounds][1])
+
+            if self.index == self.dimension.height-1:
+                self.bounds += 1
+            self.index += 1 if self.index < len(self.inputs)-1 else 0
+
+            # TODO:insert fragment to self.texts at self.index + self.bounds + 1
+            # this line doesn't work yet
+            self.texts.insert(self.index + self.bounds, (fragment, 0))
+            self.redrawn = True
+
 
         elif isKey(data, arrow_up_key):
-            self.cursor -= 1 if self.cursor > 0 else 0
+            if self.index == 0 and self.bounds > 0:
+                self.bounds -= 1
+                self.redrawn = True
+            self.index -= 1 if self.index > 0 else 0
 
         elif isKey(data, arrow_down_key):
-            self.cursor += 1 if self.cursor < len(self.inputs)-1 else 0
+            if self.index == self.dimension.height-1 and self.index + self.bounds < len(self.texts)-1:
+                self.bounds += 1
+                self.redrawn = True
+            self.index += 1 if self.index < len(self.inputs)-1 else 0
 
-        "adjust display"
-        if self.cursor < self.display[0]:
-            self.display[0] = self.cursor
-        elif self.cursor > self.display[0] + self.display[1]-1:
-            self.display[0] = self.cursor - self.display[1]
+            '''
+            for i in xrange(self.dimension.height + self.bounds - len(self.texts)):
+                self.texts.append(("", 0))
+            '''
+        else:
+            # update self.inputs
+            self.inputs[self.index].update(data)
+            self.redrawn = True
+            for i in xrange(len(self.inputs)):
+                ind = i + self.bounds
+                aninput = self.inputs[i]
+                self.texts[ind] = (aninput.data, aninput.cursor)
+                print "else", aninput.cursor
 
-        if self.display[0] + self.display[1] > len(self.inputs):
-            "append new inputboxes"
-            self.inputs.append(input(self.routine, Dimension(self.dimension.line, self.dimension.coln, self.dimension.width, 1)))
+        for i in xrange(len(self.inputs)):
+            ind = i + self.bounds
+            self.inputs[i].data = self.texts[ind][0]
+            self.inputs[i].cursor = self.texts[ind][1]
+            print "else2", self.texts[ind][1]
 
-        "reset inputs"
 
-        self.focusLine = self.inputs[self.cursor].focusLine
-        self.focusColn = self.inputs[self.cursor].focusColn + 1
+        self.focusLine = self.inputs[self.index].focusLine
+        self.focusColn = self.inputs[self.index].cursor + 1
 
 
     def draw(self):
