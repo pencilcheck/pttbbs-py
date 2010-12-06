@@ -10,7 +10,7 @@ class DB:
 
     def __init__(self):
         self.exist = os.path.exists(DB_PATH)
-        self.conn = sqlite3.connect(DB_PATH)
+        self.conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
         self.cursor = self.conn.cursor()
 
     def create(self):
@@ -34,7 +34,8 @@ class DB:
                             EMail TEXT UNIQUE,
                             Address TEXT,
                             City TEXT,
-                            Country TEXT
+                            Country TEXT,
+                            Nick TEXT
                         )"""
 
         # essentially assignment means directories
@@ -50,8 +51,8 @@ class DB:
                             UId TEXT NOT NULL,
                             IP TEXT NOT NULL,
                             Port TEXT NOT NULL,
-                            LoginTime DATE NOT NULL,
-                            LogoffTime DATE NOT NULL,
+                            LoginTime TIMESTAMP NOT NULL,
+                            LogoffTime TIMESTAMP NOT NULL,
                             Location TEXT
                         )"""
 
@@ -62,36 +63,34 @@ class DB:
                             Status TEXT NOT NULL
                         )"""
 
-        # e.g. Board Announcement on path /boards/Title/
+        # boards with no boardid is at the highest level
         boards =     """CREATE TABLE Boards
                         (
-                            Path TEXT NOT NULL,
-                            Title NOT NULL,
+                            BoardId TEXT,
+                            Title TEXT NOT NULL,
                             CreatorId TEXT,
-                            CreationDate DATE
+                            CreationDate TIMESTAMP
                         )"""
 
-        # Threads will always be under a path like /boards/Announcement/Title/
         threads =    """CREATE TABLE Threads
                         (
-                            Path TEXT UNIQUE NOT NULL,
+                            BoardId TEXT NOT NULL REFERENCES Boards(rowid) ON UPDATE CASCADE,
                             Title TEXT NOT NULL,
                             AuthorId TEXT,
                             Content TEXT,
                             Moderated TEXT,
-                            CreationDate DATE,
-                            LastModifiedDate DATE
+                            CreationDate TIMESTAMP,
+                            LastModifiedDate TIMESTAMP
                         )"""
 
-        # Push path is the thread (or push) it resides in e.g. /path/to/thread/
         replies =    """CREATE TABLE Replies
                         (
-                            PathToThread TEXT UNIQUE NOT NULL,
+                            ThreadId TEXT NOT NULL REFERENCES Threads(rowid) ON DELETE CASCADE,
                             AuthorId TEXT,
                             Content TEXT,
                             Moderated TEXT,
-                            CreationDate DATE,
-                            LastModifiedDate DATE
+                            CreationDate TIMESTAMP,
+                            LastModifiedDate TIMESTAMP
                         )"""
 
         guest =      """INSERT INTO Users

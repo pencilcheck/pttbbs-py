@@ -24,6 +24,7 @@ arrow_left_key = ['\x1bOD', '\x1b[D']
 tab_key = ['\t']
 ctrl_x = ['\x18']
 shift_key = '' # it doesn't send
+delete_key = ['\x1b[3~']
 
 clr_scr = 1
 normal = 0
@@ -128,6 +129,7 @@ class control(object):
 class selectionMenu(control):
     def __init__(self, routine, dimension, menu, **kwargs):
         super(selectionMenu, self).__init__(routine, dimension, **kwargs)
+        # menu is a list of tuples with the form (id, title) id = -1 if it is not relevant
         self.menu = menu
         self.change = [1]*len(self.menu)
         self.cursor = 0
@@ -174,14 +176,15 @@ class selectionMenu(control):
         ind = 0
         self.buffer = ""
         if any(self.change[self.offset:self.offset+self.dimension.height]):
-            for i, line in enumerate(self.menu):
+            for i, item in enumerate(self.menu):
+                line = item[1]
                 if i >= self.offset and ind < self.dimension.height:
                     #print i, self.offset, ind, self.dimension.height
                     if self.change[i]:
                         if self.cursor == ind:
-                            self.buffer = self.buffer + screen.puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, Align.Left, fg=ForegroundColors.White, bg=BackgroundColors.Yellow)
+                            self.buffer = self.buffer + screen.puts(self.dimension.line + ind, self.dimension.coln, line, self.dimension.width, Align.Left, fg=ForegroundColors.White, bg=BackgroundColors.Yellow)
                         else:
-                            self.buffer = self.buffer + screen.puts(self.dimension.line + ind, self.dimension.coln, line.strip(), self.dimension.width, Align.Left)
+                            self.buffer = self.buffer + screen.puts(self.dimension.line + ind, self.dimension.coln, line, self.dimension.width, Align.Left)
                         self.change[i] = 0
                     ind = ind + 1
 
@@ -268,15 +271,19 @@ class input(control):
 
     def backSpace(self):
         if self.cursor == 0:
-            self.data = screen.commands['BEL']
+            self.data = screen.commands['BEL'] + self.data
 
         elif self.cursor > 0:
             self.data = self.data[:self.cursor-1] + self.data[self.cursor:]
             self.moveLeft(1)
             self.redrawn = True
 
+    def delete(self):
+        self.data = self.data[:self.cursor] + self.data[self.cursor+1:]
+        self.redrawn = True
+
     def addInput(self, data):
-        if len(self.data) < self.length-1: # minus 1 for the cursor
+        if len(self.data.encode('big5')) + len(data.encode('big5')) <= self.length-1: # minus 1 for the cursor
             self.data = self.data[:self.cursor] + data + self.data[self.cursor:]
             self.moveRight(len(data))
             self.redrawn = True
@@ -287,13 +294,14 @@ class input(control):
 
         if isKey(data, backspace_key):
             self.backSpace()
+        elif isKey(data, delete_key):
+            self.delete()
         elif isKey(data, arrow_right_key):
             self.moveRight(1)
         elif isKey(data, arrow_left_key):
             self.moveLeft(1)
-        elif data > '\x20':
-            "can't be control bytes"
-
+        elif data > '\x20' or data == ' ':
+            "can't be control bytes, but space is allowed"
             self.addInput(data)
 
         if not self.concealed:
@@ -312,14 +320,13 @@ class multilineinput(control):
         self.index = 0 # this is the focus index for the inputs
         self.bounds = 0 # it is actually just lower bound
         self.inputs = [input(self.routine, Dimension(self.dimension.line + i, self.dimension.coln, self.dimension.width, 1)) for i in xrange(self.dimension.height)]
-        self.texts = [("", 0)]*self.dimension.height
+        self.texts = [("", 0)]*self.dimension.height # tuple: (text, position of cursor)
 
     def data(self):
         #return '\n'.join([d.data for d in self.inputs])
         return '\n'.join([text[0] for text in self.texts])
 
     def update(self, data=''):
-
         # update self.texts
         if isKey(data, return_key):
             coln = self.texts[self.index + self.bounds][1]
@@ -354,24 +361,41 @@ class multilineinput(control):
                 self.texts.append(("", 0))
             '''
         else:
-            # update self.inputs
-            self.inputs[self.index].update(data)
+            # need to be fixed
+            if isKey(data, backspace_key) and self.texts[self.bounds + self.index][1] == 0:
+                space = self.texts[self.bounds + self.index - 1] if self.bounds + self.index > 0 else 0
+                if self.index == 0 and self.bounds > 0:
+                    self.bounds -= 1
+                    self.redrawn = True
+                self.index -= 1 if self.index > 0 else 0
+
+                self.texts[self.bounds + self.index] = (self.texts[self.bounds + self.index][0], len(self.texts[self.bounds + self.index][0]))
+            else:
+                # update self.inputs
+                self.inputs[self.index].update(data)
+                self.texts[self.bounds + self.index] = (self.inputs[self.index].data, self.inputs[self.index].cursor)
+
             self.redrawn = True
+
+            '''
+            # don't need to, can just update the one affected
             for i in xrange(len(self.inputs)):
                 ind = i + self.bounds
                 aninput = self.inputs[i]
-                self.texts[ind] = (aninput.data, aninput.cursor)
-                print "else", aninput.cursor
+                self.texts[ind] = (aninput.data, aninput.cursor) if aninput.data != "" else ("", 0)
+            '''
+
+
 
         for i in xrange(len(self.inputs)):
             ind = i + self.bounds
             self.inputs[i].data = self.texts[ind][0]
-            self.inputs[i].cursor = self.texts[ind][1]
-            print "else2", self.texts[ind][1]
+            self.inputs[i].cursor = self.texts[ind][1] if self.inputs[i].data != "" else 0
+            self.inputs[i].update()
 
 
         self.focusLine = self.inputs[self.index].focusLine
-        self.focusColn = self.inputs[self.index].cursor + 1
+        self.focusColn = self.inputs[self.index].focusColn + 1
 
 
     def draw(self):
@@ -560,12 +584,12 @@ class topMenu(screenlet):
     def __init__(self, routine, dimension):
         super(topMenu, self).__init__(routine, dimension)
 
-        self.items = [u"(A)nnouncement",
-                      u"(B)oards",
-                      u"(C)hatroom",
-                      u"(G)ames",
-                      u"(S)ettings",
-                      u"(Q)uit"]
+        self.items = [(-1, "(A)nnouncement"),
+                      (-1, "(B)oards"),
+                      (-1, "(C)hatroom"),
+                      (-1, "(G)ames"),
+                      (-1, "(S)ettings"),
+                      (-1, "(Q)uit")]
         self.selectionMenu = selectionMenu(self.routine, Dimension(4, 20, 45, self.dimension.height - 2), self.items)
         self.header = header(self.routine, u"【主功能表】", u"批踢踢py實業坊")
         self.footer = footer(self.routine)
@@ -582,7 +606,7 @@ class topMenu(screenlet):
             if self.selectionMenu.index() == 0: # Announcement
                 self.routine.stack.push(announce(self.routine, self.dimension))
             elif self.selectionMenu.index() == 1: # Boards
-                self.routine.stack.push(boardlist(self.routine, self.dimension, "/boards"))
+                self.routine.stack.push(boardlist(self.routine, self.dimension, None))
             elif self.selectionMenu.index() == 2: # Chatroom
                 self.routine.stack.push(notfinished(self.routine, self.dimension))
             elif self.selectionMenu.index() == 3: # Games
@@ -632,9 +656,9 @@ class notfinished(screenlet):
         return normal
 
 class createBoard(screenlet):
-    def __init__(self, routine, dimension, path):
+    def __init__(self, routine, dimension, boardid):
         super(createBoard, self).__init__(routine, dimension)
-        self.path = path
+        self.boardid = boardid
         self.title = ''
 
         warning = u'標題格式有錯誤，請重新輸入。'
@@ -656,19 +680,19 @@ class createBoard(screenlet):
         if isKey(data, tab_key):
             pass # implement custom cycle
         if isKey(data, return_key):
-            if self.routine.addBoard(self.path, self.title):
+            if self.routine.addBoard(self.boardid, self.title):
                 print "added board successfully"
                 self.routine.stack.pop() #destroy it
-                self.routine.stack.push(boardlist(self.routine, self.dimension, self.path))
+                self.routine.stack.push(boardlist(self.routine, self.dimension, self.boardid))
                 return clr_scr
             else:
                 self.warninglabel.setVisibility(True)
         return normal
 
 class createThread(screenlet):
-    def __init__(self, routine, dimension, path):
+    def __init__(self, routine, dimension, boardid):
         super(createThread, self).__init__(routine, dimension)
-        self.path = path
+        self.boardid = boardid
         self.title = ''
         self.content = ''
 
@@ -709,10 +733,10 @@ class createThread(screenlet):
 
         if isKey(data, return_key):
             if self.confirmationinput.focused and self.confirmationinput.input.data == 'Y':
-                if self.routine.addThread(self.path + '/' + self.title, self.title, self.content):
+                if self.routine.addThread(self.boardid, self.title, self.content):
                     print "added thread successfully"
                     self.routine.stack.pop() #destroy it
-                    self.routine.stack.push(threadlist(self.routine, self.dimension, self.path))
+                    self.routine.stack.push(threadlist(self.routine, self.dimension, self.boardid))
                     return clr_scr
             else:
                 self.setFocusedControl(self.contentinput)
@@ -739,11 +763,11 @@ class announce(screenlet):
         return normal
 
 class boardlist(screenlet):
-    def __init__(self, routine, dimension, cwd):
+    def __init__(self, routine, dimension, boardid):
         super(boardlist, self).__init__(routine, dimension)
 
-        self.cwd = cwd
-        self.boards = selectionMenu(self.routine, Dimension(3, 0, self.dimension.width, self.dimension.height), self.routine.loadBoards(self.cwd))
+        self.boardid = boardid
+        self.boards = selectionMenu(self.routine, Dimension(3, 0, self.dimension.width, self.dimension.height), self.routine.loadBoards(self.boardid))
 
 
         self.administration = label(self.routine, Dimension(2, 0, self.dimension.width, 1),
@@ -760,23 +784,24 @@ class boardlist(screenlet):
     def handleData(self, data=''):
         if isKey(data, ctrl_x):
             self.routine.stack.pop() # destroy it first
-            self.routine.stack.push(createBoard(self.routine, self.dimension, self.cwd))
+            self.routine.stack.push(createBoard(self.routine, self.dimension, self.boardid))
             return clr_scr
         elif isKey(data, arrow_left_key):
             self.routine.stack.pop()
             return clr_scr
         elif isKey(data, arrow_right_key):
-            self.boards.redraw()
-            self.routine.stack.push(threadlist(self.routine, self.dimension, self.cwd + '/' + self.boards.menu[self.boards.index()]))
-            return clr_scr
+            if len(self.boards.menu) > 0:
+                self.boards.redraw()
+                self.routine.stack.push(threadlist(self.routine, self.dimension, self.boards.menu[self.boards.index()][0]))
+                return clr_scr
         return normal
 
 class threadlist(screenlet):
-    def __init__(self, routine, dimension, cwd):
+    def __init__(self, routine, dimension, boardid):
         super(threadlist, self).__init__(routine, dimension)
 
-        self.cwd = cwd
-        self.threads = selectionMenu(self.routine, Dimension(3, 0, self.dimension.width, self.dimension.height), self.routine.loadThreads(self.cwd))
+        self.boardid = boardid
+        self.threads = selectionMenu(self.routine, Dimension(3, 0, self.dimension.width, self.dimension.height), self.routine.loadThreads(self.boardid))
 
         self.administration = label(self.routine, Dimension(2, 0, self.dimension.width, 1), "Key C-x creates a thread", self.dimension.width, Align.Left)
 
@@ -792,7 +817,7 @@ class threadlist(screenlet):
     def handleData(self, data=''):
         if isKey(data, ctrl_x):
             self.routine.stack.pop() #destroy it first
-            self.routine.stack.push(createThread(self.routine, self.dimension, self.cwd))
+            self.routine.stack.push(createThread(self.routine, self.dimension, self.boardid))
             return clr_scr
         elif isKey(data, arrow_left_key):
             self.routine.stack.pop()
@@ -800,16 +825,16 @@ class threadlist(screenlet):
         elif isKey(data, arrow_right_key):
             if len(self.threads.menu) > 0:
                 self.threads.redraw()
-                self.routine.stack.push(threadViewer(self.routine, self.dimension, self.cwd + '/' + self.threads.menu[self.threads.index()]))
+                self.routine.stack.push(threadViewer(self.routine, self.dimension, self.threads.menu[self.threads.index()][0])) # just rowid
                 return clr_scr
         return normal
 
 class threadViewer(screenlet):
-    def __init__(self, routine, dimension, cwd):
+    def __init__(self, routine, dimension, threadid):
         super(threadViewer, self).__init__(routine, dimension)
 
-        self.cwd = cwd
-        self.content = scrollableMenu(self.routine, Dimension(2, 0, self.dimension.width, self.dimension.height - 3), self.routine.loadThread(self.cwd).split("\n"))
+        self.threadid = threadid
+        self.content = scrollableMenu(self.routine, Dimension(2, 0, self.dimension.width, self.dimension.height - 3), self.routine.loadThread(self.threadid).split("\n"))
 
         self.add(self.content)
 

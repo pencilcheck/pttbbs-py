@@ -1,11 +1,12 @@
 == TODO for pttbbs-py ==
-* Complete administrative commands interface and mechanism - 10%
-* Implement multi-line input - 10%
-    * Make all input works - 0%
-    * Make it infinitely scrollable (or set a very high limit) - 0%
-* Create options input - 10%
+* scrollableMenu optimization for scrolling - 0%
+* Implement multi-line input
+    * Make all input works - 100%
+    * Make it infinitely scrollable (or set a very high limit) - 100%
+    # Backspace behavior - 70%
+* Create options input
     * remove input, make it like terminal style - 100%
-    * refine it - 0%
+* Complete administrative commands interface and mechanism - 10%
 * Createthread add BIG5 punctuation table (like ptt) for use - 0%
 * Let users able to see threads and boards in the same screen sorted - 0%
 * Complete thread viewer - 0%

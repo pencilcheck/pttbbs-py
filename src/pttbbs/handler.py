@@ -53,9 +53,9 @@ class Routine:
     def getOnlineCount(self):
         return 0
 
-    def time(self, time=localtime()):
+    def time(self, time):
         #print strftime("%m/%d %a %Y %H:%M", time)
-        return strftime("%m/%d %a %Y %H:%M", time)
+        return time.strftime("%m/%d %a %Y %H:%M")
 
     def createSession(self):
         print "creating session at", datetime.datetime.today()
@@ -113,97 +113,94 @@ class Routine:
 
         return l
 
-    def loadPathFunction(self):
-        print "loadPathFunction"
-        print "path", self.path
-        query = (self.path,)
-        try:
-            db.instance.cursor.execute('select * from BoardFileSystem where Path = ?', query)
-            tmp = []
-            
-            for line in db.instance.cursor:
-                print line
-                tmp.append(line)
-                
-            function = str(tmp[0][3])
-            print function
-            return function
-        except:
-            pass
-
     # loads boards with given cwd
-    def loadBoards(self, cwd):
-        print "loadBoards", cwd
-        if cwd == "":
-            return []
-
-        query = (cwd + '%',)
+    def loadBoards(self, id):
+        print "loadBoards", id
+        query = (id,)
         try:
-            db.instance.cursor.execute("select * from Boards where Path LIKE ?", query)
+            if id == None:
+                db.instance.cursor.execute("select rowid, Title from Boards where BoardId IS NULL")
+            else:
+                db.instance.cursor.execute("select rowid, Title from Boards where BoardId = ?", query)
             tmp = []
             for record in db.instance.cursor:
                 print record
-                tmp.append(record[1])
+                tmp.append((record[0], record[1]))
             return tmp
-        except:
-            print "db execution error"
+        except Exception as e:
+            print "exception:", e
             return []
 
-    def addBoard(self, path, title):
-        print "adding board", title, "to", path
+    def addBoard(self, id, title):
+        print "adding board", title
 
-        board = (path, title, self.id, datetime.datetime.today(),)
+        board = (id, title, self.id, datetime.datetime.today(),)
         try:
-            db.instance.cursor.execute('insert into Boards (Path, Title, CreatorId, CreationDate) VALUES (?, ?, ?, ?)', board)
+            db.instance.cursor.execute('insert into Boards (BoardId, Title, CreatorId, CreationDate) VALUES (?, ?, ?, ?)', board)
             db.instance.commit()
         except Exception as e:
             print "exception:", e
             return 0
         return 1
 
-    # loads threads with given cwd
-    def loadThreads(self, cwd):
-        print "loadThreads", cwd
-        if cwd == "":
-            return []
-
-        query = (cwd + '%',)
+    # loads threads with given boardid
+    def loadThreads(self, id):
+        print "loadThreads"
+        #query = (cwd + '%',)
+        query = (id,)
         try:
-            db.instance.cursor.execute("select * from Threads where Path LIKE ?", query)
+            db.instance.cursor.execute("select rowid, Title from Threads where BoardId = ?", query)
             tmp = []
             for record in db.instance.cursor:
                 print record
-                tmp.append(record[1])
+                tmp.append((record[0], record[1]))
             return tmp
         except Exception as e:
             print "exception:", e
             return []
 
-    def addThread(self, path, title, content):
-        print "adding thread", title, "to", path, "with", repr(content)
+    def addThread(self, id, title, content):
+        print "adding thread", title, repr(content)
 
-        thread = (path, title, self.id, content, datetime.datetime.today(),)
+        thread = (id, title, self.id, content, datetime.datetime.now(),)
         try:
-            db.instance.cursor.execute('insert into Threads (Path, Title, AuthorId, Content, CreationDate) VALUES (?, ?, ?, ?, ?)', thread)
+            db.instance.cursor.execute('insert into Threads (BoardId, Title, AuthorId, Content, CreationDate) VALUES (?, ?, ?, ?, ?)', thread)
             db.instance.commit()
         except Exception as e:
             print "exception:", e
             return 0
         return 1
 
-    def loadThread(self, cwd):
-        print "loadThread", cwd
-        if cwd == "":
-            return []
+    def loadThread(self, id):
+        print "load thread id:", id
 
-        query = (cwd,)
+        query = (id,)
         try:
-            db.instance.cursor.execute("select * from Threads where Path = ?", query)
+            db.instance.cursor.execute("select * from Threads where rowid = ?", query)
+            fetch = db.instance.cursor.fetchone()
+            print fetch
+            header = [u"標題：" + fetch[1].strip("\n") + "\n" + u"作者：" + fetch[2].strip("\n") + "\n" + u"時間：" + self.time(fetch[5])]
+            print "header", header
 
-            return db.instance.cursor.fetchone()[3] #content
+            content = [fetch[3]]
+            print "content", content
+
+            db.instance.cursor.execute("select * from Replies where ThreadId = ?", query)
+            print "replies"
+            replies = []
+            for record in db.instance.cursor:
+                replies.append(u"推 " + record[1].strip("\n") + "：" + record[2].strip("\n"))
+
+            user = (self.id,)
+            db.instance.cursor.execute("select Signature from Users where UId = ?", user)
+            user = db.instance.cursor.fetchone()
+            print "user", user
+            footer = [user[0] if user[0] != None else ""]
+            sep = ["----------------------------\n"]
+            return "\n".join(header + sep + content + sep + replies + footer)
         except Exception as e:
             print "exception:", e
-            return []
+            return ""
 
 class ViewStack:
     # each element in the stack is a tuple ((x, y, width, height), screenlet)
